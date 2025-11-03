@@ -16,20 +16,21 @@ return new class extends Migration
             $table->string('depositor')->index();
 
             // The token being sent (on source chain)
-            $table->string('token_from')->nullable()->index(); // address(0) for ETH
-
+            $table->string('from_token_address')->nullable()->index(); // address(0) for ETH
             // The token expected on the destination chain
-            $table->string('token_to')->nullable()->index();
-            $table->integer('token_decimal'); 
+            $table->string('to_token_address')->nullable()->index(); // address(0) for hedera 
+
+            $table->string('token_from');
+            $table->string('token_to');
+
             // Pool address where the funds were sent
             $table->string('pool_address')->nullable()->index();
 
             // The destination wallet on the other chain
             $table->string('to')->index();
 
-            // Amount in base units (no decimals applied yet)
-            $table->decimal('amount', 65, 0);
-            
+            $table->decimal('amount_in', 65, 8);
+            $table->decimal('amount_out', 65, 8)->default(0);
 
             // Original timestamp from blockchain (block.timestamp)
             $table->unsignedBigInteger('timestamp')->index();

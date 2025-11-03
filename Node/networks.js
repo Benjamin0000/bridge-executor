@@ -1,14 +1,15 @@
 export const networks = [
   {
     name: "sepolia",
-    rpc: process.env.ETH_RPC,
-    contract: process.env.ETH_BRIDGE,
-    destinationChain: "hedera",
-  },
-  {
-    name: "bsc",
-    rpc: process.env.BSC_RPC,
-    contract: process.env.BSC_BRIDGE,
+    rpc: 'wss://sepolia.drpc.org',
+    contract: '0xFE81bF1F1347833Bc288a3756ac7Da4cBe55d1be',
     destinationChain: "hedera",
   }
+  //,
+  // {
+  //   name: "bsc",
+  //   rpc: '',
+  //   contract: '',
+  //   destinationChain: "hedera",
+  // }
 ];

@@ -45,7 +45,7 @@ async function startListener(network) {
       };
 
       console.log(`🌉 [${network.name}] New deposit detected: ${nouns}`);
-      await saveToLaravel(deposit);
+      // await saveToLaravel(deposit);
     } catch (e) {
       console.error(`⚠️ [${network.name}] Listener error:`, e);
     }
