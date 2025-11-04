@@ -190,12 +190,12 @@ Route::post('/update-withdrawal', function (Request $request) {
             }
 
             // Check if user has enough profit
-            if ($lp->profit < $amount) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Insufficient profit balance.',
-                ], 400);
-            }
+            // if ($lp->profit < $amount) {
+            //     return response()->json([
+            //         'success' => false,
+            //         'message' => 'Insufficient profit balance.',
+            //     ], 400);
+            // }
 
             // Deduct profit
             $lp->profit = 0;
