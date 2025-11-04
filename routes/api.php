@@ -105,3 +105,56 @@ Route::get('/user-liquidity', function (Request $request) {
         'profit' => $totalProfit             
     ]);
 });
+
+
+
+Route::post('/distribute-fee', function (Request $request) {
+    $request->validate([
+        'net_amount' => 'required|numeric|min:0',
+    ]);
+
+    $netAmount = $request->net_amount;
+    $feePct = (float)get_register('fee_pct') / 100;
+
+    // Calculate the fee amount from net_amount
+    $feeAmount = ($netAmount * $feePct) / (1 - $feePct);
+
+    $totalFee = $feeAmount;
+    // Store total fee in register
+    set_register('total_fee', $totalFee);
+
+    // Get all active liquidity providers
+    $activeLps = Lp::where('active', true)->get();
+
+    if ($activeLps->isEmpty()) {
+        return response()->json([
+            'success' => true,
+            'message' => 'Total fee recorded, but no active liquidity providers to distribute profit.',
+            'total_fee' => $totalFee,
+        ]);
+    }
+
+    // lp_fee_pct% of the total fee will be distributed among active LPs
+    $pct = (float)get_register('lp_fee_pct') / 100; 
+    $distributableFee = $totalFee * $pct;
+
+    // Total active liquidity
+    $totalLiquidity = $activeLps->sum('amount');
+
+    if ($totalLiquidity > 0) {
+        foreach ($activeLps as $lp) {
+            // proportional profit = (lp.amount / totalLiquidity) * distributableFee
+            $profitShare = ($lp->amount / $totalLiquidity) * $distributableFee;
+            $lp->profit += $profitShare;
+            $lp->save();
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Total fee recorded and distributed to active LPs.',
+        'total_fee' => $totalFee,
+        'distributed_fee' => $distributableFee,
+        'total_active_liquidity' => $totalLiquidity,
+    ]);
+});
