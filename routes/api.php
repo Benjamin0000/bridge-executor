@@ -101,7 +101,7 @@ Route::get('/user-liquidity', function (Request $request) {
     return response()->json([
         'success' => true,
         'wallet_address' => $wallet,
-        'total_liquidity' => number_format($totalLiquidity, 3), // formatted HBAR
-        'profit' => number_format($totalProfit, 3),              // formatted HBAR
+        'total_liquidity' => $totalLiquidity, 
+        'profit' => $totalProfit             
     ]);
 });
