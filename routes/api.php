@@ -122,7 +122,10 @@ Route::post('/distribute-fee', function (Request $request) {
     $feeAmount = ($netAmount * $feePct) / (1 - $feePct);
 
     $totalFee = $feeAmount;
+
+
     // Store total fee in register
+    $totalFee += (float)get_register('total_fee'); 
     set_register('total_fee', $totalFee);
 
     // Get all active liquidity providers
