@@ -41,6 +41,17 @@ Route::get('/get-fee', function () {
 });
 
 
+Route::get('/get-pool-fee', function () {
+    $total_fee = get_register('total_fee');
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'total_fee' => (float) ($total_fee ?? 0),
+        ],
+    ]);
+});
+
+
 Route::post('/add-liquidity', function (Request $request) {
 
     $request->validate([
