@@ -18,13 +18,15 @@ class bridge extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'execute token bridge';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        //
+        while(true){
+            
+        }
     }
 }

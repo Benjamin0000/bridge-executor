@@ -20,6 +20,7 @@ return new class extends Migration
         set_register('fee_pct', 2);
         set_register('lp_fee_pct', 50);
         set_register('total_fee', 0); //total fee accured.
+
     }
     /**
      * Reverse the migrations.

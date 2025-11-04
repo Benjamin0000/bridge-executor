@@ -79,3 +79,29 @@ Route::post('/add-liquidity', function (Request $request) {
         'data' => $newLp,
     ]);
 });
+
+
+
+Route::get('/user-liquidity', function (Request $request) {
+    $request->validate([
+        'wallet_address' => 'required|string',
+    ]);
+
+    $wallet = $request->wallet_address;
+
+    // Get all active LP records for the wallet
+    $activeLps = Lp::where('wallet_address', $wallet)
+                    ->where('active', true)
+                    ->get();
+
+    // Calculate total liquidity and total profit
+    $totalLiquidity = $activeLps->sum('amount');
+    $totalProfit = $activeLps->sum('profit');
+
+    return response()->json([
+        'success' => true,
+        'wallet_address' => $wallet,
+        'total_liquidity' => number_format($totalLiquidity, 3), // formatted HBAR
+        'profit' => number_format($totalProfit, 3),              // formatted HBAR
+    ]);
+});
