@@ -4,12 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Models\Lp;
 
-// Route::get('/user', function (Request $request) {
-//     return $request->user();
-// })->middleware('auth:sanctum');
-
 Route::post('/set-fee', function (Request $request) {
-
     $request->validate([
         'fee_pct' => 'required|numeric|min:0',
         'lp_fee_pct' => 'required|numeric|min:0',
