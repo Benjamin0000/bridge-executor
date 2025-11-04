@@ -30,22 +30,13 @@ Route::post('/set-fee', function (Request $request) {
 Route::get('/get-fee', function () {
     $fee_pct = get_register('fee_pct');
     $lp_fee_pct = get_register('lp_fee_pct');
+    $total_fee = get_register('total_fee');
 
     return response()->json([
         'success' => true,
         'data' => [
             'fee_pct' => (float) ($fee_pct ?? 0),
-            'lp_fee_pct' => (float) ($lp_fee_pct ?? 0)
-        ],
-    ]);
-});
-
-
-Route::get('/get-pool-fee', function () {
-    $total_fee = get_register('total_fee');
-    return response()->json([
-        'success' => true,
-        'data' => [
+            'lp_fee_pct' => (float) ($lp_fee_pct ?? 0),
             'total_fee' => (float) ($total_fee ?? 0),
         ],
     ]);
