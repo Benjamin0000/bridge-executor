@@ -2,7 +2,11 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\TokenPriceController; 
 use App\Models\Lp;
+
+Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
+
 
 Route::post('/set-fee', function (Request $request) {
     $request->validate([
@@ -246,6 +250,8 @@ Route::post('/update-withdrawal', function (Request $request) {
         ], 500);
     }
 });
+
+
 
 
 
