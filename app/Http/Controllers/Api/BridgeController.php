@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use App\Models\TokenPrice;
 
 class BridgeController extends Controller
 {
@@ -28,9 +27,11 @@ class BridgeController extends Controller
         // --- Token pricing ---
         $fromTokenPrice = get_token_price($fromToken);
         $toTokenPrice = get_token_price($toToken);
+        $nativeTokenSymbol = get_native_token_symbol($toNetwork);
+        $nativeTokenPrice = get_token_price($nativeTokenSymbol);
         $feePct = (float)get_register('fee_pct') ?? 0.5;
 
-        if (!$fromTokenPrice || !$toTokenPrice) {
+        if (!$fromTokenPrice || !$toTokenPrice || !$nativeTokenPrice) {
             return response()->json([
                 'success' => false,
                 'message' => 'Missing token price data.',
@@ -38,13 +39,22 @@ class BridgeController extends Controller
         }
 
         // --- Convert fromToken to toToken ---
-        $usdValue = $amount * $fromTokenPrice; // USD value of amount of fromToken
-        $toTokenAmount = $usdValue / $toTokenPrice; // equivalent amount of toToken
+        $usdValue = $amount * $fromTokenPrice;
+        $toTokenAmount = $usdValue / $toTokenPrice;
+
+        // --- Equivalent native token amount ---
+        $nativeAmount = $usdValue / $nativeTokenPrice;
 
         // --- Deduct bridge fee ---
         $feeRate = $feePct / 100;
         $tokenAmountAfterFee = $toTokenAmount * (1 - $feeRate);
-        $nativeAmountAfterFee = $tokenAmountAfterFee; // same value for nativeAmount field
+        $nativeAmountAfterFee = $nativeAmount * (1 - $feeRate);
+
+        // --- Optional: truncate to safe decimals for NodeJS (to avoid ethers parseUnits errors) ---
+        $tokenDecimals = get_token_decimals($toToken, $toNetwork); // function should return token decimals
+        $nativeDecimals = get_token_decimals($nativeTokenSymbol, $toNetwork);
+        $tokenAmountAfterFee = floor($tokenAmountAfterFee * (10 ** $tokenDecimals)) / (10 ** $tokenDecimals);
+        $nativeAmountAfterFee = floor($nativeAmountAfterFee * (10 ** $nativeDecimals)) / (10 ** $nativeDecimals);
 
         // --- Prepare NodeJS precheck payload ---
         $payload = [
@@ -71,9 +81,9 @@ class BridgeController extends Controller
             return response()->json([
                 'success' => true,
                 'fee_pct' => $feePct,
-                'token_amount' => round($tokenAmountAfterFee, 8),
-                'native_amount' => round($nativeAmountAfterFee, 8),
-                'usd_value' => round($usdValue, 4),
+                'token_amount' => $tokenAmountAfterFee,
+                'native_amount' => $nativeAmountAfterFee,
+                'usd_value' => $usdValue,
                 'node_precheck' => $nodeResponse,
             ]);
         } catch (\Exception $e) {
@@ -83,7 +93,6 @@ class BridgeController extends Controller
             ], 500);
         }
     }
-
 
     public function bridge(Request $request)
     {
@@ -102,30 +111,37 @@ class BridgeController extends Controller
             ], 400);
         }
 
-        // --- Convert fromToken to toToken using prices ---
+        // --- Token pricing ---
         $fromTokenPrice = get_token_price($fromToken);
         $toTokenPrice = get_token_price($toToken);
-        $feePct = (float) get_register('fee_pct') ?? 0.5;
+        $nativeTokenSymbol = get_native_token_symbol($toNetwork);
+        $nativeTokenPrice = get_token_price($nativeTokenSymbol);
+        $feePct = (float)get_register('fee_pct') ?? 0.5;
 
-        if (!$fromTokenPrice || !$toTokenPrice) {
+        if (!$fromTokenPrice || !$toTokenPrice || !$nativeTokenPrice) {
             return response()->json([
                 'success' => false,
                 'message' => 'Missing token price data.',
             ], 400);
         }
 
-        // USD value of amount of fromToken
+        // --- Convert fromToken to toToken ---
         $usdValue = $amount * $fromTokenPrice;
-
-        // Convert to target token amount
         $toTokenAmount = $usdValue / $toTokenPrice;
+        $nativeAmount = $usdValue / $nativeTokenPrice;
 
-        // Deduct fee
+        // --- Deduct bridge fee ---
         $feeRate = $feePct / 100;
         $tokenAmountAfterFee = $toTokenAmount * (1 - $feeRate);
-        $nativeAmountAfterFee = $tokenAmountAfterFee; // same value, just in native units
+        $nativeAmountAfterFee = $nativeAmount * (1 - $feeRate);
 
-        // NodeJS execute payload
+        // --- Truncate to safe decimals ---
+        $tokenDecimals = get_token_decimals($toToken, $toNetwork);
+        $nativeDecimals = get_token_decimals($nativeTokenSymbol, $toNetwork);
+        $tokenAmountAfterFee = floor($tokenAmountAfterFee * (10 ** $tokenDecimals)) / (10 ** $tokenDecimals);
+        $nativeAmountAfterFee = floor($nativeAmountAfterFee * (10 ** $nativeDecimals)) / (10 ** $nativeDecimals);
+
+        // --- NodeJS execute payload ---
         $payload = [
             'network' => $toNetwork,
             'token' => $toToken,
@@ -152,9 +168,9 @@ class BridgeController extends Controller
             return response()->json([
                 'success' => true,
                 'fee_pct' => $feePct,
-                'token_amount' => round($tokenAmountAfterFee, 8),
-                'native_amount' => round($nativeAmountAfterFee, 8),
-                'usd_value' => round($usdValue, 4),
+                'token_amount' => $tokenAmountAfterFee,
+                'native_amount' => $nativeAmountAfterFee,
+                'usd_value' => $usdValue,
                 'node_response' => $nodeResponse,
             ]);
         } catch (\Exception $e) {
