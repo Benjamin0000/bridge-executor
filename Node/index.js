@@ -1,193 +1,201 @@
+import dotenv from 'dotenv';
 import express from "express";
 import { ethers } from "ethers";
 import {
   Client,
   AccountBalanceQuery,
   AccountId,
-  Hbar,
   PrivateKey,
-  TransferTransaction,
+  TransferTransaction 
 } from "@hashgraph/sdk";
+dotenv.config();
+
+import {
+  RPC_URL,
+  TOKENS,
+  WRAPPED_NATIVE,
+  ROUTER,
+  convertHederaIdToEVMAddress,
+  getEvmAddressFromAccountId,
+  safeHbar,
+  erc20Abi,
+  routerAbi,
+  formatAmountForToken
+} from "./tokens.js";
 
 const app = express();
 app.use(express.json());
 
-// ----------------------
-// ENV CONFIG
-// ----------------------
 const {
-  RPC_URL,
-  OPERATOR_ID,
+  HEDERA_OPERATOR_ADDRESS,
+  EVM_OPERATOR_ADDRESS,
   OPERATOR_PRIVATE_KEY,
-  ROUTER,
-  WHBAR_CONTRACT,
 } = process.env;
 
-if (!RPC_URL || !OPERATOR_ID || !OPERATOR_PRIVATE_KEY) {
-  console.error("Missing environment variables");
+if (!HEDERA_OPERATOR_ADDRESS || !EVM_OPERATOR_ADDRESS || !OPERATOR_PRIVATE_KEY) {
+  console.error("Missing environment variables (HEDERA_OPERATOR_ADDRESS, EVM_OPERATOR_ADDRESS, OPERATOR_PRIVATE_KEY)");
   process.exit(1);
 }
 
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, provider);
+// Config
+const SLIPPAGE_TOLERANCE = 0.005; // 0.5%
+const EVM_NATIVE_DECIMALS = 18;
+const HEDERA_NATIVE_DECIMALS = 8;
 
-// ABIs
-const erc20Abi = [
-  "function balanceOf(address) view returns (uint256)",
-  "function decimals() view returns (uint8)",
-];
-const routerAbi = [
-  "function getAmountsOut(uint amountIn, address[] calldata path) view returns (uint[] memory amounts)",
-];
-
-// ----------------------
-// HELPERS
-// ----------------------
-async function getTokenDecimals(address) {
+async function getEvmAmountsOut(amountInBigInt, path, routerAddress, provider) {
   try {
-    const token = new ethers.Contract(address, erc20Abi, provider);
-    return await token.decimals();
-  } catch {
-    return 18; // fallback
-  }
-}
-
-async function getEvmBalance(address, tokenAddress) {
-  if (!tokenAddress) {
-    return await provider.getBalance(address);
-  }
-  const token = new ethers.Contract(tokenAddress, erc20Abi, provider);
-  return await token.balanceOf(address);
-}
-
-async function getEvmAmountsOut(amountIn, path) {
-  try {
-    const router = new ethers.Contract(ROUTER, routerAbi, provider);
-    return await router.getAmountsOut(amountIn, path);
+    const router = new ethers.Contract(routerAddress, routerAbi, provider);
+    // router.getAmountsOut expects same units as parseUnits used for amountIn
+    const amounts = await router.getAmountsOut(amountInBigInt, path);
+    // ethers v6 returns BigInt elements — keep them as-is
+    return amounts;
   } catch (e) {
+    // route missing / no liquidity / RPC error
     return null;
   }
 }
 
-function safeHbar(amount) {
-  return new Hbar(amount);
-}
-
-// ---------------------------------------------------------------------------
-// 🧩 1️⃣ PRECHECK ENDPOINT
-// ---------------------------------------------------------------------------
 app.post("/bridge/precheck", async (req, res) => {
+
+  console.log("All body", req.body)
   try {
-    const {
-      fromNetwork,
-      toNetwork,
-      userAddress,
-      tokenAddress,
-      amount,
-      isNative,
-    } = req.body;
+    const { network, token, amount, nativeAmount } = req.body;
 
-    if (!fromNetwork || !toNetwork || !userAddress || !amount) {
-      return res
-        .status(400)
-        .json({ canBridge: false, message: "Missing required parameters" });
+    // --- Basic validation ---
+    if (!network || !token) {
+      return res.status(400).json({ canBridge: false, message: "Missing network or token" });
     }
 
-    const parsedAmount = Number(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res
-        .status(400)
-        .json({ canBridge: false, message: "Invalid amount" });
+    if (!RPC_URL?.[network]) {
+      return res.status(400).json({ canBridge: false, message: `Unsupported network: ${network}` });
     }
 
-    let userHasFunds = false;
+    const Token = TOKENS?.[network]?.[token];
+    if (!Token) {
+      return res.status(400).json({ canBridge: false, message: "Unsupported token for the specified network" });
+    }
+
+    // amount: amount of token user wants to bridge (in token units, e.g. "1.5")
+    // nativeAmount: amount of native token (in native units) intended to be used for swapping if token not present
+    if (typeof amount === "undefined" || typeof nativeAmount === "undefined") {
+      return res.status(400).json({ canBridge: false, message: "Missing amount or nativeAmount" });
+    }
+
+    // parse amounts as strings to preserve precision then parseUnits later
+    const amountStr = String(amount);
+    const nativeAmountStr = String(nativeAmount);
+
+    // Validate numeric-ish strings
+    if (isNaN(Number(amountStr)) || Number(amountStr) <= 0) {
+      return res.status(400).json({ canBridge: false, message: "Invalid token amount" });
+    }
+    if (isNaN(Number(nativeAmountStr)) || Number(nativeAmountStr) < 0) {
+      return res.status(400).json({ canBridge: false, message: "Invalid nativeAmount" });
+    }
+
     let poolHasFunds = false;
-    let estimatedOut = null;
+    let estimatedOutBigInt = null;
     let slippageOk = true;
 
-    // -------------------
-    // 🔹 HEDERA BRIDGE CHECK
-    // -------------------
-    if (fromNetwork === "hedera") {
+    const provider = new ethers.JsonRpcProvider(RPC_URL[network]);
+
+    // --- HEDERA PATH (native HTS or HTS swap fallback) ---
+    if (network === "hedera") {
+      // Setup Hedera client for operator balance read
       const client = Client.forTestnet().setOperator(
-        AccountId.fromString(OPERATOR_ID),
+        AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
         PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
       );
 
-      const userBal = await new AccountBalanceQuery()
-        .setAccountId(AccountId.fromString(userAddress))
-        .execute(client);
-
-      if (isNative) {
-        userHasFunds =
-          userBal.hbars.toTinybars() >= safeHbar(parsedAmount).toTinybars();
-      } else {
-        const tokenBal = userBal.tokens._map.get(tokenAddress);
-        userHasFunds =
-          tokenBal && tokenBal.toNumber() >= parsedAmount * 10 ** 8; // assume 8 decimals
-      }
-
       const poolBal = await new AccountBalanceQuery()
-        .setAccountId(AccountId.fromString(OPERATOR_ID))
+        .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
         .execute(client);
 
-      if (isNative) {
-        poolHasFunds =
-          poolBal.hbars.toTinybars() >= safeHbar(parsedAmount).toTinybars();
+      // Convert HBAR balance to tinybars BigInt
+      const poolHbarTinybars = BigInt(poolBal.hbars.toTinybars().toString());
+
+      if (Token.native) {
+        // Token is HBAR native => check pool native balance
+        const requiredTinybars = safeHbar(amountStr).toTinybars().toString ? BigInt(safeHbar(amountStr).toTinybars().toString()) : BigInt(0);
+        poolHasFunds = poolHbarTinybars >= requiredTinybars;
       } else {
-        const tokenBal = poolBal.tokens._map.get(tokenAddress);
-        if (tokenBal && tokenBal.toNumber() >= parsedAmount * 10 ** 8) {
-          poolHasFunds = true;
-        } else {
-          poolHasFunds = poolBal.hbars.toTinybars() > 0;
+        // Token is HTS (non-native). AccountBalanceQuery returns token balances map.
+        // Implementation detail: SDK exposes tokens as `poolBal.tokens` — convert value to BigInt safely.
+        const tokenBal = poolBal.tokens._map ? poolBal.tokens._map.get(Token.address) : undefined;
+        // tokenBal may be a Long-like object — convert to string then BigInt
+        const tokenBalBigInt = tokenBal ? BigInt(tokenBal.toString()) : BigInt(0);
+        // Required token base units
+
+        let amountStrRounded = formatAmountForToken(amountStr, Token.decimals);
+        const requiredTokenBase = BigInt(ethers.parseUnits(amountStrRounded, Token.decimals).toString());
+        poolHasFunds = tokenBalBigInt >= requiredTokenBase;
+
+
+      }
+
+      // If pool lacks token but might have native HBAR for swap, do fallback
+      if (!poolHasFunds && !Token.native) {
+        // check pool native amount for swap
+        const requiredNativeTinybars = safeHbar(nativeAmountStr).toTinybars().toString ? BigInt(safeHbar(nativeAmountStr).toTinybars().toString()) : BigInt(0);
+        if (poolHbarTinybars >= requiredNativeTinybars) {
+          // simulate EVM swap on Hedera EVM: wrapped native (WHBAR) -> target token
+          const routerAddress = ROUTER[network];
+          const wrappedNativeAddress = WRAPPED_NATIVE[network];
+          // convert HTS id to EVM token address if necessary
+          const tokenOutAddress = Token.address.startsWith("0x") ? Token.address : convertHederaIdToEVMAddress(Token.address);
+          const path = [wrappedNativeAddress, tokenOutAddress];
+
+          // For Hedera EVM wrapped tokens we use typical 18 decimals on the EVM side
+          let nativeAmountStrRounded = formatAmountForToken(nativeAmountStr, Token.native ? HEDERA_NATIVE_DECIMALS : EVM_NATIVE_DECIMALS);
+          const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStrRounded, EVM_NATIVE_DECIMALS).toString());
+          const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
+
+          if (amounts && amounts.length > 1) {
+            estimatedOutBigInt = amounts[1]; // bigint
+            // slippage calc (bigint)
+            const amountOutMin = estimatedOutBigInt - (estimatedOutBigInt * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000)) / BigInt(1000));
+            slippageOk = amountOutMin <= estimatedOutBigInt && estimatedOutBigInt > 0n;
+            poolHasFunds = slippageOk; // if slippage OK treat as pool has funds for swap path
+          } else {
+            slippageOk = false;
+          }
         }
       }
-    }
-
-    // -------------------
-    // 🔹 EVM BRIDGE CHECK
-    // -------------------
-    else {
-      const decimals = tokenAddress
-        ? await getTokenDecimals(tokenAddress)
-        : 18;
-      const amountIn = ethers.parseUnits(parsedAmount.toString(), decimals);
-
-      // User balance
-      const userBalance = await getEvmBalance(userAddress, isNative ? null : tokenAddress);
-      userHasFunds = userBalance >= amountIn;
-
-      // Pool/operator balance
-      const poolBalance = await getEvmBalance(wallet.address, isNative ? null : tokenAddress);
-      if (poolBalance >= amountIn) {
-        poolHasFunds = true;
+    } else {
+      // --- EVM networks (ethereum, bsc, etc.) ---
+      if (Token.native) {
+        // pool native balance (ETH/BNB/etc.) - provider.getBalance returns bigint
+        const bal = await provider.getBalance(EVM_OPERATOR_ADDRESS);
+        const required = BigInt(ethers.parseUnits(amountStr, EVM_NATIVE_DECIMALS).toString());
+        poolHasFunds = bal >= required;
       } else {
-        // fallback: check if enough native for swap
-        const nativeBalance = await getEvmBalance(wallet.address);
-        poolHasFunds = nativeBalance > ethers.parseEther("0.1");
-      }
+        // ERC20 token check
+        const tokenContract = new ethers.Contract(Token.address, erc20Abi, provider);
+        const bal = await tokenContract.balanceOf(EVM_OPERATOR_ADDRESS);
+        const requiredTokenBase = BigInt(ethers.parseUnits(amountStr, Token.decimals).toString());
+        poolHasFunds = BigInt(bal.toString()) >= requiredTokenBase;
 
-      // Slippage check if router & token path available
-      if (!isNative && ROUTER && WHBAR_CONTRACT) {
-        const path = [WHBAR_CONTRACT, tokenAddress];
-        const amounts = await getEvmAmountsOut(amountIn, path);
-        if (amounts && amounts.length > 1) {
-          estimatedOut = amounts[1];
-          const slippageTolerance = 0.005; // 0.5%
-          const amountOutMin =
-            estimatedOut -
-            (estimatedOut * BigInt(Math.floor(slippageTolerance * 1000))) /
-              BigInt(1000);
-          slippageOk = amountOutMin <= estimatedOut && estimatedOut > 0;
+        // fallback: if operator doesn't hold token, check native for swap
+        if (!poolHasFunds) {
+          const nativeBal = await provider.getBalance(EVM_OPERATOR_ADDRESS);
+          const requiredNative = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
+          if (nativeBal >= requiredNative) {
+            const routerAddress = ROUTER[network];
+            const wrappedNativeAddress = WRAPPED_NATIVE[network];
+            const path = [wrappedNativeAddress, Token.address];
+            const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
+            const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
+            if (amounts && amounts.length > 1) {
+              estimatedOutBigInt = amounts[1];
+              const amountOutMin = estimatedOutBigInt - (estimatedOutBigInt * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000))) / BigInt(1000);
+              slippageOk = amountOutMin <= estimatedOutBigInt && estimatedOutBigInt > 0n;
+              poolHasFunds = slippageOk;
+            } else {
+              slippageOk = false;
+            }
+          }
         }
       }
-    }
-
-    if (!userHasFunds) {
-      return res.json({
-        canBridge: false,
-        message: "Sender has insufficient balance",
-      });
     }
 
     if (!poolHasFunds) {
@@ -204,72 +212,237 @@ app.post("/bridge/precheck", async (req, res) => {
       });
     }
 
+    // Format estimatedOut if present — use token decimals if non-native; otherwise use native decimals
+    let estimatedOutFormatted = null;
+    if (estimatedOutBigInt) {
+      const decimals = Token.native ? (network === "hedera" ? HEDERA_NATIVE_DECIMALS : EVM_NATIVE_DECIMALS) : Token.decimals;
+      estimatedOutFormatted = ethers.formatUnits(estimatedOutBigInt, decimals);
+    }
+
     return res.json({
       canBridge: true,
       message: "Precheck passed",
-      estimatedOut: estimatedOut
-        ? ethers.formatUnits(estimatedOut, 18)
-        : null,
+      estimatedOut: estimatedOutFormatted,
     });
   } catch (err) {
     console.error("Precheck error:", err);
     return res.status(500).json({
       canBridge: false,
       message: "Server error during precheck",
-      error: err.message,
+      error: err?.message ?? String(err),
     });
   }
 });
 
-// ---------------------------------------------------------------------------
-// 🚀 2️⃣ EXECUTE BRIDGE ENDPOINT (uses your working logic)
-// ---------------------------------------------------------------------------
+
+
+
 app.post("/bridge/execute", async (req, res) => {
   try {
-    const {
-      recipient,
-      amount,
-      tokenAddress,
-      isNative,
-    } = req.body;
+    const { network, token, amount, nativeAmount, recipient, isNative } = req.body;
 
-    const client = Client.forTestnet().setOperator(
-      AccountId.fromString(OPERATOR_ID),
-      PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
-    );
+    if (!network || !token || !amount || !nativeAmount || !recipient) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
 
-    if (isNative) {
-      const tx = await new TransferTransaction()
-        .addHbarTransfer(AccountId.fromString(OPERATOR_ID), safeHbar(-amount))
-        .addHbarTransfer(AccountId.fromString(recipient), safeHbar(amount))
+    const parsedAmount = Number(amount);
+    const parsedNativeAmount = Number(nativeAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0 || isNaN(parsedNativeAmount) || parsedNativeAmount < 0) {
+      return res.status(400).json({ error: "Invalid amount or nativeAmount" });
+    }
+
+    const Token = TOKENS[network][token];
+    if (!Token) {
+      return res.status(400).json({ error: "Unsupported token for this network" });
+    }
+
+    const provider = new ethers.JsonRpcProvider(RPC_URL[network]);
+    const wallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, provider);
+
+    // ------------------------------------------------------------------
+    // 🟣 HEDERA NETWORK
+    // ------------------------------------------------------------------
+    if (network === "hedera") {
+      const client = Client.forTestnet().setOperator(
+        AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
+        PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
+      );
+
+      const poolBal = await new AccountBalanceQuery()
+        .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
         .execute(client);
-      const receipt = await tx.getReceipt(client);
-      return res.json({
-        status: "Native transfer complete",
-        txId: tx.transactionId.toString(),
-        receipt: receipt.status.toString(),
-      });
-    } else {
-      // Implement EVM swap logic here (your existing code)
-      return res.json({
-        status: "Token swap execution placeholder",
-        message: "Handled by proof-of-concept logic",
-      });
+
+      const hbarBalance = BigInt(poolBal.hbars.toTinybars().toString());
+      const requiredTinybars = BigInt(safeHbar(parsedNativeAmount).toTinybars().toString());
+      let hasTokenFunds = false;
+
+      if (!Token.native) {
+        const tokenBal = poolBal.tokens._map.get(Token.address);
+        const tokenBalTiny = tokenBal ? BigInt(tokenBal.toString()) : 0n;
+        const requiredTokenTiny = BigInt(ethers.parseUnits(parsedAmount.toString(), Token.decimals).toString());
+        hasTokenFunds = tokenBalTiny >= requiredTokenTiny;
+      }
+
+      // ✅ CASE 1: Native HBAR transfer
+      if (Token.native && isNative) {
+        const tx = await new TransferTransaction()
+          .addHbarTransfer(HEDERA_OPERATOR_ADDRESS, safeHbar(parsedAmount).negated())
+          .addHbarTransfer(recipient, safeHbar(parsedAmount))
+          .execute(client);
+
+        const receipt = await tx.getReceipt(client);
+        return res.json({
+          status: "success",
+          message: "HBAR native transfer successful",
+          txHash: tx.transactionId.toString(),
+          network,
+          type: "native-transfer",
+          statusText: receipt.status.toString(),
+        });
+      }
+
+      // ✅ CASE 2: HTS Token transfer if pool has funds
+      if (!Token.native && hasTokenFunds) {
+        const tx = await new TransferTransaction()
+          .addTokenTransfer(Token.address, HEDERA_OPERATOR_ADDRESS, -parsedAmount * 10 ** Token.decimals)
+          .addTokenTransfer(Token.address, recipient, parsedAmount * 10 ** Token.decimals)
+          .execute(client);
+
+        const receipt = await tx.getReceipt(client);
+        return res.json({
+          status: "success",
+          message: `${Token.symbol} HTS token transfer successful`,
+          txHash: tx.transactionId.toString(),
+          network,
+          type: "token-transfer",
+          statusText: receipt.status.toString(),
+        });
+      }
+
+      // ✅ CASE 3: Swap only if token insufficient and native balance enough
+      if (!hasTokenFunds && hbarBalance >= requiredTinybars) {
+        console.log(`🔄 Insufficient ${Token.symbol}, swapping native HBAR...`);
+        const router = new ethers.Contract(ROUTER[network], routerAbi, wallet);
+        const wrappedNative = WRAPPED_NATIVE[network];
+        const tokenAddress = convertHederaIdToEVMAddress(Token.address);
+
+        const amountIn = ethers.parseUnits(parsedNativeAmount.toString(), 18);
+        const path = [wrappedNative, tokenAddress];
+
+        const amounts = await router.getAmountsOut(amountIn, path);
+        if (!amounts || amounts.length === 0) throw new Error("No liquidity path available");
+
+        const slippage = 0.005;
+        const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(slippage * 1000))) / BigInt(1000);
+
+        const evmRecipient = await getEvmAddressFromAccountId(recipient, client);
+
+        const tx = await router.swapExactETHForTokens(
+          amountOutMin,
+          path,
+          evmRecipient,
+          Math.floor(Date.now() / 1000) + 60 * 10,
+          { value: amountIn, gasLimit: BigInt(1_000_000) }
+        );
+
+        const receipt = await tx.wait();
+        return res.json({
+          status: "success",
+          message: "Swap completed successfully",
+          txHash: receipt.hash,
+          network,
+          type: "swap",
+          blockNumber: receipt.blockNumber,
+        });
+      }
+
+      throw new Error("Insufficient pool liquidity for both token and native swap");
+    }
+
+    // ------------------------------------------------------------------
+    // 🟢 EVM NETWORKS
+    // ------------------------------------------------------------------
+    else {
+      const tokenContract = !Token.native ? new ethers.Contract(Token.address, erc20Abi, provider) : null;
+      let poolTokenBal = 0n;
+      let poolNativeBal = await provider.getBalance(EVM_OPERATOR_ADDRESS);
+
+      if (!Token.native) {
+        const bal = await tokenContract.balanceOf(EVM_OPERATOR_ADDRESS);
+        poolTokenBal = BigInt(bal.toString());
+      }
+
+      const requiredToken = BigInt(ethers.parseUnits(parsedAmount.toString(), Token.decimals).toString());
+      const requiredNative = BigInt(ethers.parseUnits(parsedNativeAmount.toString(), 18).toString());
+
+      // ✅ CASE 1: Native transfer
+      if (Token.native && isNative) {
+        const tx = await wallet.sendTransaction({
+          to: recipient,
+          value: requiredToken,
+        });
+        const receipt = await tx.wait();
+        return res.json({
+          status: "success",
+          message: "Native transfer successful",
+          txHash: receipt.hash,
+          network,
+          type: "native-transfer",
+          blockNumber: receipt.blockNumber,
+        });
+      }
+
+      // ✅ CASE 2: ERC20 direct transfer if sufficient
+      if (!Token.native && poolTokenBal >= requiredToken) {
+        const tx = await tokenContract.connect(wallet).transfer(recipient, requiredToken);
+        const receipt = await tx.wait();
+        return res.json({
+          status: "success",
+          message: `${Token.symbol} ERC20 transfer successful`,
+          txHash: receipt.hash,
+          network,
+          type: "token-transfer",
+          blockNumber: receipt.blockNumber,
+        });
+      }
+
+      // ✅ CASE 3: Fallback swap only if pool native >= requiredNative
+      if (poolNativeBal >= requiredNative) {
+        console.log(`🔄 Pool low on ${Token.symbol}, performing swap...`);
+        const router = new ethers.Contract(ROUTER[network], routerAbi, wallet);
+        const wrappedNative = WRAPPED_NATIVE[network];
+        const path = [wrappedNative, Token.address];
+        const amounts = await router.getAmountsOut(requiredNative, path);
+        if (!amounts || amounts.length === 0) throw new Error("No liquidity path available");
+
+        const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000))) / BigInt(1000);
+        const tx = await router.swapExactETHForTokens(
+          amountOutMin,
+          path,
+          recipient,
+          Math.floor(Date.now() / 1000) + 600,
+          { value: requiredNative, gasLimit: BigInt(1_000_000) }
+        );
+        const receipt = await tx.wait();
+        return res.json({
+          status: "success",
+          message: "Swap completed successfully",
+          txHash: receipt.hash,
+          network,
+          type: "swap",
+          blockNumber: receipt.blockNumber,
+        });
+      }
+
+      throw new Error("Insufficient liquidity for transfer or swap");
     }
   } catch (err) {
-    console.error("Execute error:", err);
-    return res.status(500).json({
-      status: "failed",
-      message: "Bridge execution failed",
-      error: err.message,
-    });
+    console.error("❌ Execute error:", err);
+    res.status(500).json({ status: "failed", error: err.message });
   }
 });
 
-// ----------------------
-// RUN SERVER
-// ----------------------
+
+// run server
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () =>
-  console.log(`Bridge service running on port ${PORT}`)
-);
+app.listen(PORT, () => console.log(`Bridge service running on port ${PORT}`));

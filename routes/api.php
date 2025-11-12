@@ -3,9 +3,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TokenPriceController; 
+use App\Http\Controllers\Api\BridgeController;
 use App\Models\Lp;
 
 Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
+Route::post('/precheck', [BridgeController::class, 'precheck']);
+Route::post('/bridge', [BridgeController::class, 'bridge']);
 
 
 Route::post('/set-fee', function (Request $request) {
