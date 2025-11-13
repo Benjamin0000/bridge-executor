@@ -41,7 +41,7 @@ class TokenPriceController extends Controller
                         'SAUCE' => 0.00029578,
                         'DAI' => 2.18,
                         'USDCt' => 1.00,
-                        default => 0,
+                        default => 1.00,
                     };
                 }
             }
