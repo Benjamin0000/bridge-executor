@@ -17,6 +17,7 @@ class TokenPriceController extends Controller
         'SAUCE' => 'saucerswap',
         'DAI' => 'dai',
         'USDCt' => 'usdc', // assuming 'usdc' is stored in DB
+        'USDC' => 'usdc', // assuming 'usdc' is stored in DB
     ];
 
     /**
