@@ -35,6 +35,7 @@ function get_token_price($token)
         'SAUCE' => 'saucerswap',
         'DAI' => 'dai',
         'USDCt' => 'usdc',
+        'USDC' => 'usdc',
     ];
     $price = TokenPrice::where('token', $SYMBOL_TO_ID[$token])->latest()->first();
     return $price ? $price->price : 1;
@@ -45,6 +46,7 @@ function get_native_token_symbol($network)
     return match($network) {
         'hedera' => 'HBAR',
         'bsc' => 'BNB',
+        'binance' => 'BNB',
         'ethereum' => 'ETH',
         default => null,
     };
