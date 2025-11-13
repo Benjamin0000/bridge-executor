@@ -129,8 +129,6 @@ app.post("/bridge/precheck", async (req, res) => {
         let amountStrRounded = formatAmountForToken(amountStr, Token.decimals);
         const requiredTokenBase = BigInt(ethers.parseUnits(amountStrRounded, Token.decimals).toString());
         poolHasFunds = tokenBalBigInt >= requiredTokenBase;
-
-
       }
 
       // If pool lacks token but might have native HBAR for swap, do fallback
@@ -146,8 +144,7 @@ app.post("/bridge/precheck", async (req, res) => {
           const path = [wrappedNativeAddress, tokenOutAddress];
 
           // For Hedera EVM wrapped tokens we use typical 18 decimals on the EVM side
-          let nativeAmountStrRounded = formatAmountForToken(nativeAmountStr, Token.native ? HEDERA_NATIVE_DECIMALS : EVM_NATIVE_DECIMALS);
-          const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStrRounded, EVM_NATIVE_DECIMALS).toString());
+          const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
           const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
 
           if (amounts && amounts.length > 1) {
@@ -185,6 +182,7 @@ app.post("/bridge/precheck", async (req, res) => {
             const path = [wrappedNativeAddress, Token.address];
             const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
             const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
+
             if (amounts && amounts.length > 1) {
               estimatedOutBigInt = amounts[1];
               const amountOutMin = estimatedOutBigInt - (estimatedOutBigInt * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000))) / BigInt(1000);
@@ -239,7 +237,7 @@ app.post("/bridge/precheck", async (req, res) => {
 
 app.post("/bridge/execute", async (req, res) => {
   try {
-    const { network, token, amount, nativeAmount, recipient, isNative } = req.body;
+    const { network, token, amount, nativeAmount, recipient } = req.body;
 
     if (!network || !token || !amount || !nativeAmount || !recipient) {
       return res.status(400).json({ error: "Missing required parameters" });
@@ -284,7 +282,7 @@ app.post("/bridge/execute", async (req, res) => {
       }
 
       // ✅ CASE 1: Native HBAR transfer
-      if (Token.native && isNative) {
+      if (Token.native) {
         const tx = await new TransferTransaction()
           .addHbarTransfer(HEDERA_OPERATOR_ADDRESS, safeHbar(parsedAmount).negated())
           .addHbarTransfer(recipient, safeHbar(parsedAmount))
@@ -376,7 +374,7 @@ app.post("/bridge/execute", async (req, res) => {
       const requiredNative = BigInt(ethers.parseUnits(parsedNativeAmount.toString(), 18).toString());
 
       // ✅ CASE 1: Native transfer
-      if (Token.native && isNative) {
+      if (Token.native) {
         const tx = await wallet.sendTransaction({
           to: recipient,
           value: requiredToken,

@@ -51,3 +51,8 @@ function get_native_token_symbol($network)
         default => null,
     };
 }
+
+function generateNounce()
+{
+    return bin2hex(random_bytes(16));
+}

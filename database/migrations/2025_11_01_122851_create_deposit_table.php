@@ -33,7 +33,7 @@ return new class extends Migration
             $table->decimal('amount_out', 65, 8)->default(0);
 
             // Original timestamp from blockchain (block.timestamp)
-            $table->unsignedBigInteger('timestamp')->index();
+            $table->unsignedBigInteger('timestamp')->nullable()->index();
 
             // Chain metadata for tracking multi-chain setups
             $table->string('source_chain')->nullable();
@@ -41,17 +41,16 @@ return new class extends Migration
 
             // Status tracking for backend processing
             $table->enum('status', [
+                'none',         // initial state / created
                 'pending',      // seen on source chain, waiting to process
                 'processing',   // currently being bridged to dest chain
                 'completed',    // successfully bridged
                 'failed',       // error while processing
-            ])->default('pending')->index();
+            ])->default('none')->index();
 
             // Hashes for traceability
             $table->string('tx_hash')->nullable()->index();          // source chain tx hash
             $table->string('release_tx_hash')->nullable()->index();  // dest chain execution tx hash
-            // Optional metadata
-            $table->json('meta')->nullable();
             $table->timestamps();
         });
     }

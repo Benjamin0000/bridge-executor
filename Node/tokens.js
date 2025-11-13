@@ -14,19 +14,19 @@ export const routerAbi = [
 export const RPC_URL = {
     hedera: 'https://testnet.hashio.io/api',
     ethereum: 'https://ethereum-sepolia-rpc.publicnode.com',
-    binance: 'https://bsc-testnet-dataseed.bnbchain.org'
+    binance: 'https://bsc-dataseed.binance.org'
 }; 
 
 export const WRAPPED_NATIVE = {
     hedera: '0x0000000000000000000000000000000000003aD2',
     ethereum: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9',
-    binance: '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'
+    binance: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
 }; 
 
 export const ROUTER = {
     hedera: '0x0000000000000000000000000000000000004b40',
     ethereum: '0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3',
-    binance: '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'
+    binance: '0x10ED43C718714eb63d5aA57B78B54704E256024E'
 };
 
 export const convertHederaIdToEVMAddress = (address)=> {
@@ -142,10 +142,10 @@ export const TOKENS = {
       decimals: 18,
       native: true
     },
-    USDCt: {
-      symbol: "USDCt",
-      address: "0xabbd60313073EB1673940f0f212C7baC5333707e",
-      decimals: 6
+    USDC: {
+      symbol: "USDC",
+      address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+      decimals: 18
     },
   },
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Models\Deposit;
 
 class BridgeController extends Controller
 {
@@ -16,7 +17,6 @@ class BridgeController extends Controller
         $toToken = $request->input('toToken');
         $amount = (float) $request->input('amount');
 
-        // --- Basic validation ---
         if (!$fromNetwork || !$toNetwork || !$fromToken || !$toToken || !$amount || $amount <= 0) {
             return response()->json([
                 'success' => false,
@@ -38,11 +38,11 @@ class BridgeController extends Controller
             ], 400);
         }
 
-        // --- Convert fromToken to toToken ---
+        // --- Convert fromToken → USD → toToken ---
         $usdValue = $amount * $fromTokenPrice;
         $toTokenAmount = $usdValue / $toTokenPrice;
 
-        // --- Equivalent native token amount ---
+        // --- Convert USD → native token equivalent ---
         $nativeAmount = $usdValue / $nativeTokenPrice;
 
         // --- Deduct bridge fee ---
@@ -50,13 +50,10 @@ class BridgeController extends Controller
         $tokenAmountAfterFee = $toTokenAmount * (1 - $feeRate);
         $nativeAmountAfterFee = $nativeAmount * (1 - $feeRate);
 
-        // --- Optional: truncate to safe decimals for NodeJS (to avoid ethers parseUnits errors) ---
-        $tokenDecimals = get_token_decimals($toToken, $toNetwork); // function should return token decimals
-        $nativeDecimals = get_token_decimals($nativeTokenSymbol, $toNetwork);
-        $tokenAmountAfterFee = floor($tokenAmountAfterFee * (10 ** $tokenDecimals)) / (10 ** $tokenDecimals);
-        $nativeAmountAfterFee = floor($nativeAmountAfterFee * (10 ** $nativeDecimals)) / (10 ** $nativeDecimals);
+        // --- Round both amounts to 2dp for NodeJS safety ---
+        $tokenAmountAfterFee = round($tokenAmountAfterFee, 8);
+        $nativeAmountAfterFee = round($nativeAmountAfterFee, 8);
 
-        // --- Prepare NodeJS precheck payload ---
         $payload = [
             'network' => $toNetwork,
             'token' => $toToken,
@@ -83,7 +80,7 @@ class BridgeController extends Controller
                 'fee_pct' => $feePct,
                 'token_amount' => $tokenAmountAfterFee,
                 'native_amount' => $nativeAmountAfterFee,
-                'usd_value' => $usdValue,
+                'usd_value' => round($usdValue, 4),
                 'node_precheck' => $nodeResponse,
             ]);
         } catch (\Exception $e) {
@@ -94,6 +91,7 @@ class BridgeController extends Controller
         }
     }
 
+
     public function bridge(Request $request)
     {
         $fromNetwork = $request->input('fromNetwork');
@@ -102,9 +100,9 @@ class BridgeController extends Controller
         $toToken = $request->input('toToken');
         $amount = (float) $request->input('amount');
         $fromAddress = $request->input('fromAddress');
-        $isNative = (bool) $request->input('isNative', false);
+        $toAddress = $request->input('toAddress');
 
-        if (!$fromNetwork || !$toNetwork || !$fromToken || !$toToken || !$amount || !$fromAddress) {
+        if (!$fromNetwork || !$toNetwork || !$fromToken || !$toToken || !$amount || !$fromAddress || !$toAddress || $amount <= 0) {
             return response()->json([
                 'success' => false,
                 'message' => 'Missing required parameters.',
@@ -125,59 +123,55 @@ class BridgeController extends Controller
             ], 400);
         }
 
-        // --- Convert fromToken to toToken ---
+        // --- Convert fromToken → toToken ---
         $usdValue = $amount * $fromTokenPrice;
         $toTokenAmount = $usdValue / $toTokenPrice;
+
+        // --- Convert to native token equivalent ---
         $nativeAmount = $usdValue / $nativeTokenPrice;
 
-        // --- Deduct bridge fee ---
+        // --- Deduct fee ---
         $feeRate = $feePct / 100;
-        $tokenAmountAfterFee = $toTokenAmount * (1 - $feeRate);
-        $nativeAmountAfterFee = $nativeAmount * (1 - $feeRate);
+        $tokenAmountAfterFee = round($toTokenAmount * (1 - $feeRate), 8);
+        $nativeAmountAfterFee = round($nativeAmount * (1 - $feeRate), 8);
 
-        // --- Truncate to safe decimals ---
-        $tokenDecimals = get_token_decimals($toToken, $toNetwork);
-        $nativeDecimals = get_token_decimals($nativeTokenSymbol, $toNetwork);
-        $tokenAmountAfterFee = floor($tokenAmountAfterFee * (10 ** $tokenDecimals)) / (10 ** $tokenDecimals);
-        $nativeAmountAfterFee = floor($nativeAmountAfterFee * (10 ** $nativeDecimals)) / (10 ** $nativeDecimals);
+        // --- Save deposit in database ---
+        $deposit = Deposit::create([
+            'nouns' => generateNounce(),
+            'depositor' => $fromAddress,
+            'token_from' => $fromToken,
+            'token_to' => $toToken,
+            'to' => $toAddress,
+            'amount_in' => $amount,
+            'amount_out' => $tokenAmountAfterFee,
+            'timestamp' => now()->timestamp,
+            'source_chain' => $fromNetwork,
+            'destination_chain' => $toNetwork,
+            'status' => 'pending',
+            'dest_native_amt' => $nativeAmountAfterFee 
+        ]);
 
-        // --- NodeJS execute payload ---
-        $payload = [
-            'network' => $toNetwork,
-            'token' => $toToken,
-            'amount' => $tokenAmountAfterFee,
-            'nativeAmount' => $nativeAmountAfterFee,
-            'recipient' => $fromAddress,
-            'isNative' => $isNative,
-        ];
-
-        try {
-            $response = Http::timeout(30)
-                ->post(env('NODE_BRIDGE_URL') . '/bridge/execute', $payload);
-
-            if (!$response->successful()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Node bridge execution failed.',
-                    'details' => $response->body(),
-                ], 500);
-            }
-
-            $nodeResponse = $response->json();
-
-            return response()->json([
-                'success' => true,
-                'fee_pct' => $feePct,
-                'token_amount' => $tokenAmountAfterFee,
-                'native_amount' => $nativeAmountAfterFee,
-                'usd_value' => $usdValue,
-                'node_response' => $nodeResponse,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Bridge execution error: ' . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Bridge request created.',
+            'deposit_id' => $deposit->id,
+            'token_amount' => $tokenAmountAfterFee,
+            'native_amount' => $nativeAmountAfterFee,
+            'usd_value' => round($usdValue, 4),
+            'status' => 'pending'
+        ]);
     }
+
+    public function set_bridge_status()
+    {
+        $nouns = $request->input('nouns');
+        $deposit = Deposit::where('nouns', $nouns)->where('status', 'none')->first();
+        if (!$deposit) {
+            return response()->json(['success' => false, 'message' => 'Deposit not found or already processed.'], 404);
+        }
+        $deposit->status = 'pending';
+        $deposit->save();
+        return response()->json(['success' => true]);
+    }
+
 }

@@ -10,6 +10,8 @@ Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
 Route::post('/precheck', [BridgeController::class, 'precheck']);
 Route::post('/bridge', [BridgeController::class, 'bridge']);
 
+Route::post('/s-status', [BridgeController::class, 'set_bridge_status']);
+
 
 Route::post('/set-fee', function (Request $request) {
     $request->validate([
