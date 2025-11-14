@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Deposit extends Model
 {
     protected $fillable = [
-        'nouns',
+        'nonce',
         'depositor',
         'from_token_address',
         'to_token_address', 

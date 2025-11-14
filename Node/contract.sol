@@ -6,17 +6,18 @@ interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
 }
 
-contract TokenBridge {
+contract Bridge {
     /* ========== EVENTS ========== */
-
+ 
     event BridgeDeposit(
-        string indexed nouns,
+        string indexed nonce,
         address indexed from,
         address indexed tokenFrom,
         uint256 amount,
         address to,
         address tokenTo,
-        address poolAddress
+        address poolAddress, 
+        uint64 desChain
     );
 
     event PoolAddressUpdated(
@@ -33,6 +34,7 @@ contract TokenBridge {
         address depositor;  // who deposited
         address pool;       // pool address that received the funds
         uint256 timestamp;  // when deposit happened
+        uint64 desChain; 
     }
 
     mapping(string => Deposit) public deposits;
@@ -64,12 +66,13 @@ contract TokenBridge {
         address tokenTo,
         address to,
         uint256 amount,
-        string calldata nouns
+        string calldata nonce, 
+        uint64 desChain
     ) external payable nonReentrant {
-        require(bytes(nouns).length > 0, "nouns required");
+        require(bytes(nonce).length > 0, "nonce required");
         require(to != address(0), "invalid to address");
         require(poolAddress != address(0), "pool not set");
-        require(!deposits[nouns].status, "nouns already used");
+        require(!deposits[nonce].status, "nonce already used");
 
         if (tokenFrom == address(0)) {
             // Native ETH deposit
@@ -83,7 +86,7 @@ contract TokenBridge {
             require(ok, "ERC20 transfer to pool failed");
         }
 
-        deposits[nouns] = Deposit({
+        deposits[nonce] = Deposit({
             status: true,
             tokenFrom: tokenFrom,
             tokenTo: tokenTo,
@@ -91,9 +94,10 @@ contract TokenBridge {
             to: to,
             depositor: msg.sender,
             pool: poolAddress,
-            timestamp: block.timestamp
+            timestamp: block.timestamp, 
+            desChain: desChain
         });
-        emit BridgeDeposit(nouns, msg.sender, tokenFrom, amount, to, tokenTo, poolAddress);
+        emit BridgeDeposit(nonce, msg.sender, tokenFrom, amount, to, tokenTo, poolAddress, desChain);
     }
 
     /* ========== ADMIN UTILITIES ========== */
@@ -110,8 +114,8 @@ contract TokenBridge {
         emit PoolAddressUpdated(oldPool, newPool);
     }
 
-    function isActive(string calldata nouns) external view returns (bool) {
-        return deposits[nouns].status;
+    function isActive(string calldata nonce) external view returns (bool) {
+        return deposits[nonce].status;
     }
 
     receive() external payable {

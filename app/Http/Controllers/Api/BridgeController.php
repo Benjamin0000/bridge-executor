@@ -16,6 +16,8 @@ class BridgeController extends Controller
         $fromToken = $request->input('fromToken');
         $toToken = $request->input('toToken');
         $amount = (float) $request->input('amount');
+        $fromAddress = $request->input('fromAddress');
+        $toAddress = $request->input('toAddress');
 
         if (!$fromNetwork || !$toNetwork || !$fromToken || !$toToken || !$amount || $amount <= 0) {
             return response()->json([
@@ -72,8 +74,21 @@ class BridgeController extends Controller
                     'details' => $response->body(),
                 ], 500);
             }
-
             $nodeResponse = $response->json();
+            $deposit = Deposit::create([
+                'nonce' => generateNounce(),
+                'depositor' => $fromAddress,
+                'token_from' => $fromToken,
+                'token_to' => $toToken,
+                'to' => $toAddress,
+                'amount_in' => $amount,
+                'amount_out' => $tokenAmountAfterFee,
+                'timestamp' => now()->timestamp,
+                'source_chain' => $fromNetwork,
+                'destination_chain' => $toNetwork,
+                'status' => 'none',
+                'dest_native_amt' => $nativeAmountAfterFee 
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -82,6 +97,7 @@ class BridgeController extends Controller
                 'native_amount' => $nativeAmountAfterFee,
                 'usd_value' => round($usdValue, 4),
                 'node_precheck' => $nodeResponse,
+                'nonce' => $deposit->nonce,
             ]);
         } catch (\Exception $e) {
             return response()->json([

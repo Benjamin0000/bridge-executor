@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('deposits', function (Blueprint $table) {
             $table->id();
             // Nouns ID from smart contract event
-            $table->string('nouns')->unique();
+            $table->string('nonce')->unique();
             // Original depositor on the source chain
             $table->string('depositor')->index();
 
