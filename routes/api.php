@@ -4,12 +4,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TokenPriceController;
 use App\Http\Controllers\Api\BridgeController;
+use App\Http\Controllers\Api\VoltController;
 use App\Models\Lp;
+use App\Models\Volt;
 
 Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
 Route::post('/precheck', [BridgeController::class, 'precheck']);
 Route::post('/bridge', [BridgeController::class, 'bridge']);
-Route::post('/s-status', [BridgeController::class, 'set_bridge_status']);
+Route::post('/get-bridge-status', [BridgeController::class, 'get_bridge_status']);
+Route::get('/get-volt/{network}', [VoltController::class, 'get_volt']);
 
 
 Route::post('/set-fee', function (Request $request) {
@@ -95,12 +98,15 @@ Route::post('/add-liquidity', function (Request $request) {
 Route::get('/user-liquidity', function (Request $request) {
     $request->validate([
         'wallet_address' => 'required|string',
+        'network'=> 'required'
     ]);
 
     $wallet = $request->wallet_address;
+    $network = $request->network;
 
     // Get all active LP records for the wallet
     $activeLps = Lp::where('wallet_address', $wallet)
+                    ->where('network', $network)
                     ->where('active', true)
                     ->get();
 
@@ -172,6 +178,8 @@ Route::post('/distribute-fee', function (Request $request) {
         'total_active_liquidity' => $totalLiquidity,
     ]);
 });
+
+
 
 
 Route::post('/update-withdrawal', function (Request $request) {
@@ -254,8 +262,3 @@ Route::post('/update-withdrawal', function (Request $request) {
         ], 500);
     }
 });
-
-
-
-
-

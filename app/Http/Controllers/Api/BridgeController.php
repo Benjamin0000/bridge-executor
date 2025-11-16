@@ -53,8 +53,8 @@ class BridgeController extends Controller
         $nativeAmountAfterFee = $nativeAmount * (1 - $feeRate);
 
         // --- Round both amounts to 2dp for NodeJS safety ---
-        $tokenAmountAfterFee = round($tokenAmountAfterFee, 8);
-        $nativeAmountAfterFee = round($nativeAmountAfterFee, 8);
+        $tokenAmountAfterFee = $tokenAmountAfterFee;
+        $nativeAmountAfterFee = $nativeAmountAfterFee;
 
         $payload = [
             'network' => $toNetwork,
@@ -110,83 +110,29 @@ class BridgeController extends Controller
 
     public function bridge(Request $request)
     {
-        $fromNetwork = $request->input('fromNetwork');
-        $toNetwork = $request->input('toNetwork');
-        $fromToken = $request->input('fromToken');
-        $toToken = $request->input('toToken');
-        $amount = (float) $request->input('amount');
-        $fromAddress = $request->input('fromAddress');
-        $toAddress = $request->input('toAddress');
+  
+        $nonce = $request->input('nonce');
+        $deposit = Deposit::where('nonce', $nonce)->first();
 
-        if (!$fromNetwork || !$toNetwork || !$fromToken || !$toToken || !$amount || !$fromAddress || !$toAddress || $amount <= 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Missing required parameters.',
-            ], 400);
+        if($deposit->status == 'none'){
+            $deposit->status = 'pending';
+            $deposit->save();
         }
-
-        // --- Token pricing ---
-        $fromTokenPrice = get_token_price($fromToken);
-        $toTokenPrice = get_token_price($toToken);
-        $nativeTokenSymbol = get_native_token_symbol($toNetwork);
-        $nativeTokenPrice = get_token_price($nativeTokenSymbol);
-        $feePct = (float)get_register('fee_pct') ?? 0.5;
-
-        if (!$fromTokenPrice || !$toTokenPrice || !$nativeTokenPrice) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Missing token price data.',
-            ], 400);
-        }
-
-        // --- Convert fromToken → toToken ---
-        $usdValue = $amount * $fromTokenPrice;
-        $toTokenAmount = $usdValue / $toTokenPrice;
-
-        // --- Convert to native token equivalent ---
-        $nativeAmount = $usdValue / $nativeTokenPrice;
-
-        // --- Deduct fee ---
-        $feeRate = $feePct / 100;
-        $tokenAmountAfterFee = round($toTokenAmount * (1 - $feeRate), 8);
-        $nativeAmountAfterFee = round($nativeAmount * (1 - $feeRate), 8);
-
-        // --- Save deposit in database ---
-        $deposit = Deposit::create([
-            'nouns' => generateNounce(),
-            'depositor' => $fromAddress,
-            'token_from' => $fromToken,
-            'token_to' => $toToken,
-            'to' => $toAddress,
-            'amount_in' => $amount,
-            'amount_out' => $tokenAmountAfterFee,
-            'timestamp' => now()->timestamp,
-            'source_chain' => $fromNetwork,
-            'destination_chain' => $toNetwork,
-            'status' => 'pending',
-            'dest_native_amt' => $nativeAmountAfterFee 
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Bridge request created.',
-            'deposit_id' => $deposit->id,
-            'token_amount' => $tokenAmountAfterFee,
-            'native_amount' => $nativeAmountAfterFee,
-            'usd_value' => round($usdValue, 4),
-            'status' => 'pending'
-        ]);
+        return response()->json(['success' => true]);
     }
 
-    public function set_bridge_status()
+    public function get_bridge_status(Request $request)
     {
-        $nouns = $request->input('nouns');
-        $deposit = Deposit::where('nouns', $nouns)->where('status', 'none')->first();
+        $nonce = $request->input('nonce');
+        $deposit = Deposit::where('nonce', $nonce)->first();
         if (!$deposit) {
-            return response()->json(['success' => false, 'message' => 'Deposit not found or already processed.'], 404);
+            return response()->json(['success' => false, 'message' => 'Deposit not found or already processed.', 'nonce'=>$nonce], 404);
         }
-        $deposit->status = 'pending';
-        $deposit->save();
+
+        return [
+            'status'=>$deposit->status, 
+            'withdrawHash'=>$deposit->release_tx_hash
+        ]; 
         return response()->json(['success' => true]);
     }
 

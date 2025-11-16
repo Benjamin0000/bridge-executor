@@ -11,6 +11,7 @@ class Lp extends Model
         'amount',
         'profit',
         'active',
+        'network'
     ];
 
     protected $casts = [

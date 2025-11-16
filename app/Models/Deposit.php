@@ -24,9 +24,13 @@ class Deposit extends Model
         'tx_hash',
         'release_tx_hash',
         'meta',
+        'dest_native_amt'
     ];
 
     protected $casts = [
         'meta' => 'array',
     ];
+
+
+    
 }

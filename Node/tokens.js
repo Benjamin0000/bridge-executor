@@ -1,9 +1,37 @@
 import { AccountId, AccountInfoQuery, Hbar} from "@hashgraph/sdk"
 
+/**
+ * Truncates a string representation of a decimal number to a specific number of places.
+ * This is safer than Math.round() for token inputs.
+ * @param {string} amountStr - The human-readable amount string (e.g., "7.5555551").
+ * @param {number} decimals - The token's maximum supported decimals (Token.decimals).
+ * @returns {string} The truncated amount string (e.g., "7.555555").
+ */
+export function truncateDecimals(amountStr, decimals) {
+    if (decimals === 0) {
+        return amountStr.split('.')[0] || '0'; // Handle tokens with 0 decimals
+    }
+
+    const parts = amountStr.split('.');
+    
+    // If there is no decimal part, return as is.
+    if (parts.length === 1) {
+        return amountStr;
+    }
+
+    // Truncate the fractional part
+    const fractionalPart = parts[1].substring(0, decimals);
+    
+    // Recombine the integer part with the truncated fractional part
+    return parts[0] + '.' + fractionalPart;
+}
+
 
 export const erc20Abi = [
   "function balanceOf(address) view returns (uint256)",
-  "function decimals() view returns (uint8)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function transfer(address to, uint256 amount) returns (bool)"
 ];
 
 export const routerAbi = [
@@ -19,7 +47,7 @@ export const RPC_URL = {
 
 export const WRAPPED_NATIVE = {
     hedera: '0x0000000000000000000000000000000000003aD2',
-    ethereum: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9',
+    ethereum: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
     binance: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
 }; 
 
@@ -77,15 +105,6 @@ export async function getEvmAddressFromAccountId(
   }
 }
 
-// Helper function to round amount to token decimals
-export function formatAmountForToken(amount, decimals) {
-  const factor = 10 ** decimals;
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  const rounded = Math.floor(num * factor) / factor;
-  return rounded.toString();
-}
-
-
 /**
  * Safely parse any numeric input into a valid Hbar instance.
  * 
@@ -130,7 +149,7 @@ export const TOKENS = {
     },
     USDCt: {
       symbol: "USDCt",
-      address: "0xDb740b2CdC598bDD54045c1f9401c011785032A6",
+      address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
       decimals: 6, 
       native: false
     },

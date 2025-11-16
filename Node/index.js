@@ -20,7 +20,7 @@ import {
   safeHbar,
   erc20Abi,
   routerAbi,
-  formatAmountForToken
+  truncateDecimals
 } from "./tokens.js";
 
 const app = express();
@@ -82,7 +82,7 @@ app.post("/bridge/precheck", async (req, res) => {
     }
 
     // parse amounts as strings to preserve precision then parseUnits later
-    const amountStr = String(amount);
+    const amountStr = truncateDecimals(String(amount), Token.decimals);
     const nativeAmountStr = String(nativeAmount);
 
     // Validate numeric-ish strings
@@ -126,8 +126,7 @@ app.post("/bridge/precheck", async (req, res) => {
         const tokenBalBigInt = tokenBal ? BigInt(tokenBal.toString()) : BigInt(0);
         // Required token base units
 
-        let amountStrRounded = formatAmountForToken(amountStr, Token.decimals);
-        const requiredTokenBase = BigInt(ethers.parseUnits(amountStrRounded, Token.decimals).toString());
+        const requiredTokenBase = BigInt(ethers.parseUnits(amountStr, Token.decimals).toString());
         poolHasFunds = tokenBalBigInt >= requiredTokenBase;
       }
 
@@ -144,7 +143,7 @@ app.post("/bridge/precheck", async (req, res) => {
           const path = [wrappedNativeAddress, tokenOutAddress];
 
           // For Hedera EVM wrapped tokens we use typical 18 decimals on the EVM side
-          const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
+          const amountInBigInt = BigInt(ethers.parseUnits( truncateDecimals(nativeAmountStr, EVM_NATIVE_DECIMALS), EVM_NATIVE_DECIMALS).toString());
           const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
 
           if (amounts && amounts.length > 1) {
@@ -175,12 +174,12 @@ app.post("/bridge/precheck", async (req, res) => {
         // fallback: if operator doesn't hold token, check native for swap
         if (!poolHasFunds) {
           const nativeBal = await provider.getBalance(EVM_OPERATOR_ADDRESS);
-          const requiredNative = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
+          const requiredNative = BigInt(ethers.parseUnits( truncateDecimals(nativeAmountStr, EVM_NATIVE_DECIMALS), EVM_NATIVE_DECIMALS).toString());
           if (nativeBal >= requiredNative) {
             const routerAddress = ROUTER[network];
             const wrappedNativeAddress = WRAPPED_NATIVE[network];
             const path = [wrappedNativeAddress, Token.address];
-            const amountInBigInt = BigInt(ethers.parseUnits(nativeAmountStr, EVM_NATIVE_DECIMALS).toString());
+            const amountInBigInt = BigInt(ethers.parseUnits( truncateDecimals(nativeAmountStr, EVM_NATIVE_DECIMALS), EVM_NATIVE_DECIMALS).toString());
             const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
 
             if (amounts && amounts.length > 1) {
@@ -243,6 +242,8 @@ app.post("/bridge/execute", async (req, res) => {
       return res.status(400).json({ error: "Missing required parameters" });
     }
 
+    console.log(req.body)
+
     const parsedAmount = Number(amount);
     const parsedNativeAmount = Number(nativeAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0 || isNaN(parsedNativeAmount) || parsedNativeAmount < 0) {
@@ -277,7 +278,7 @@ app.post("/bridge/execute", async (req, res) => {
       if (!Token.native) {
         const tokenBal = poolBal.tokens._map.get(Token.address);
         const tokenBalTiny = tokenBal ? BigInt(tokenBal.toString()) : 0n;
-        const requiredTokenTiny = BigInt(ethers.parseUnits(parsedAmount.toString(), Token.decimals).toString());
+        const requiredTokenTiny = BigInt(ethers.parseUnits(truncateDecimals(parsedAmount.toString(), Token.decimals), Token.decimals).toString());
         hasTokenFunds = tokenBalTiny >= requiredTokenTiny;
       }
 
@@ -324,8 +325,10 @@ app.post("/bridge/execute", async (req, res) => {
         const wrappedNative = WRAPPED_NATIVE[network];
         const tokenAddress = convertHederaIdToEVMAddress(Token.address);
 
-        const amountIn = ethers.parseUnits(parsedNativeAmount.toString(), 18);
+        const amountIn = ethers.parseUnits(truncateDecimals(parsedNativeAmount.toString(), 18), 18);
         const path = [wrappedNative, tokenAddress];
+        console.log('parsed amount', parsedNativeAmount.toString())
+        console.log('the amount in', amountIn)
 
         const amounts = await router.getAmountsOut(amountIn, path);
         if (!amounts || amounts.length === 0) throw new Error("No liquidity path available");
@@ -370,8 +373,8 @@ app.post("/bridge/execute", async (req, res) => {
         poolTokenBal = BigInt(bal.toString());
       }
 
-      const requiredToken = BigInt(ethers.parseUnits(parsedAmount.toString(), Token.decimals).toString());
-      const requiredNative = BigInt(ethers.parseUnits(parsedNativeAmount.toString(), 18).toString());
+      const requiredToken = BigInt(ethers.parseUnits( truncateDecimals(parsedAmount.toString(), Token.decimals), Token.decimals ).toString());
+      const requiredNative = BigInt(ethers.parseUnits( truncateDecimals(parsedNativeAmount.toString(), 18), 18).toString() );
 
       // ✅ CASE 1: Native transfer
       if (Token.native) {
@@ -412,6 +415,9 @@ app.post("/bridge/execute", async (req, res) => {
         const path = [wrappedNative, Token.address];
         const amounts = await router.getAmountsOut(requiredNative, path);
         if (!amounts || amounts.length === 0) throw new Error("No liquidity path available");
+
+        console.log('token paths')
+        console.log(path)
 
         const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000))) / BigInt(1000);
         const tx = await router.swapExactETHForTokens(

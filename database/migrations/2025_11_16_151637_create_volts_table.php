@@ -11,21 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('lps', function (Blueprint $table) {
+        Schema::create('volts', function (Blueprint $table) {
             $table->id();
             $table->string('network');
-            $table->string('wallet_address')->unique();
-            $table->decimal('amount', 36, 18)->default(0); // stores user's liquidity amount
-            $table->decimal('profit', 36, 18)->default(0); // accrued profits
-            $table->boolean('active')->default(true); // 1 = active, 0 = inactive
+            $table->decimal('tvl', 65, 8)->default(0);
+            $table->decimal('fees_generated', 65, 8)->default(0);
+            $table->decimal('total', 65, 8)->default(0);
             $table->timestamps();
         });
     }
+
     /**
      * Reverse the migrations.
      */
     public function down(): void
     {
-        Schema::dropIfExists('lps');
+        Schema::dropIfExists('volts');
     }
 };

@@ -31,6 +31,7 @@ return new class extends Migration
 
             $table->decimal('amount_in', 65, 8);
             $table->decimal('amount_out', 65, 8)->default(0);
+            $table->decimal('dest_native_amt', 65, 8)->default(0);
 
             // Original timestamp from blockchain (block.timestamp)
             $table->unsignedBigInteger('timestamp')->nullable()->index();
