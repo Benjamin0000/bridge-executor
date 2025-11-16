@@ -131,7 +131,8 @@ export const TOKENS = {
     USDCt: {
       symbol: "USDCt",
       address: "0xDb740b2CdC598bDD54045c1f9401c011785032A6",
-      decimals: 6
+      decimals: 6, 
+      native: false
     },
   },
 
@@ -145,7 +146,8 @@ export const TOKENS = {
     USDC: {
       symbol: "USDC",
       address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
-      decimals: 18
+      decimals: 18, 
+      native: false
     },
   },
 
@@ -159,17 +161,20 @@ export const TOKENS = {
     SAUCE: {
       symbol: "SAUCE",
       address: "0.0.1183558",
-      decimals: 6
+      decimals: 6,
+      native: false 
     },
     CLXY: {
       symbol: "CLXY",
       address: "0.0.5365",
-      decimals: 6
+      decimals: 6,
+      native: false
     },
     DAI: {
       symbol: "DAI",
       address: "0.0.5529",
-      decimals: 8
+      decimals: 8,
+      native: false
     }
   },
 };
