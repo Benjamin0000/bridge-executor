@@ -20,7 +20,7 @@ class bridge extends Command
             $pending = Deposit::where('status', 'pending')->first();
 
             if (!$pending) {
-                $this->line("⏳ No pending bridge requests...");
+                // $this->line("⏳ No pending bridge requests...");
                 sleep(2);
                 continue;
             }
