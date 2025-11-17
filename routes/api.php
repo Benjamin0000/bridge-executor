@@ -16,7 +16,7 @@ Route::get('/volts', [VoltController::class, 'volts']);
 Route::get('/volt/{network}', [VoltController::class, 'get_volt']);
 Route::post('/add-liquidity', [VoltController::class, 'add_liquidity']);
 Route::get('/user-liquidity', [VoltController::class, 'user_liquidity']);
-Route::post('/s-bridge', [VoltController::class, 'get_bridge_status']);
+Route::post('/get-bridge-status', [VoltController::class, 'get_bridge_status']);
 
 
 
