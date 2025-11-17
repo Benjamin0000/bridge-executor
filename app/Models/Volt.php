@@ -8,6 +8,6 @@ class Volt extends Model
 {
     protected $fillable = [
         'network', 
-        'tvl'
+        'network_slug'
     ]; 
 }

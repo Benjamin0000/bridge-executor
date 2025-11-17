@@ -11,8 +11,11 @@ use App\Models\Volt;
 Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
 Route::post('/precheck', [BridgeController::class, 'precheck']);
 Route::post('/bridge', [BridgeController::class, 'bridge']);
-Route::post('/get-bridge-status', [BridgeController::class, 'get_bridge_status']);
-Route::get('/get-volt/{network}', [VoltController::class, 'get_volt']);
+
+Route::get('/volts', [VoltController::class, 'volts']);
+Route::get('/volt/{network}', [VoltController::class, 'get_volt']);
+Route::post('/add-liquidity', [VoltController::class, 'add_liquidity']);
+Route::get('/user-liquidity', [VoltController::class, 'user_liquidity']);
 
 
 Route::post('/set-fee', function (Request $request) {
@@ -54,73 +57,7 @@ Route::get('/get-fee', function () {
 });
 
 
-Route::post('/add-liquidity', function (Request $request) {
 
-    $request->validate([
-        'wallet_address' => 'required|string',
-        'amount' => 'required|numeric|min:0',
-    ]);
-
-    $wallet = $request->wallet_address;
-    $amount = $request->amount;
-
-    $existingLp = Lp::where('wallet_address', $wallet)->latest()->first();
-
-    if ($existingLp && $existingLp->active) {
-        //If active LP exists — add to amount
-        $existingLp->amount += $amount;
-        $existingLp->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Liquidity added to existing active provider.',
-            'data' => $existingLp,
-        ]);
-    }
-
-    //If no active LP or LP inactive — create new record
-    $newLp = Lp::create([
-        'wallet_address' => $wallet,
-        'amount' => $amount,
-        'profit' => 0,
-        'active' => true,
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'New liquidity provider record created.',
-        'data' => $newLp,
-    ]);
-});
-
-
-
-Route::get('/user-liquidity', function (Request $request) {
-    $request->validate([
-        'wallet_address' => 'required|string',
-        'network'=> 'required'
-    ]);
-
-    $wallet = $request->wallet_address;
-    $network = $request->network;
-
-    // Get all active LP records for the wallet
-    $activeLps = Lp::where('wallet_address', $wallet)
-                    ->where('network', $network)
-                    ->where('active', true)
-                    ->get();
-
-    // Calculate total liquidity and total profit
-    $totalLiquidity = $activeLps->sum('amount');
-    $totalProfit = $activeLps->sum('profit');
-
-    return response()->json([
-        'success' => true,
-        'wallet_address' => $wallet,
-        'total_liquidity' => $totalLiquidity, 
-        'profit' => $totalProfit             
-    ]);
-});
 
 
 
