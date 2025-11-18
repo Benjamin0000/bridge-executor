@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Models\Deposit;
+use App\Jobs\ProcessDeposit; 
 
 class BridgeController extends Controller
 {
@@ -117,6 +118,8 @@ class BridgeController extends Controller
         if($deposit->status == 'none'){
             $deposit->status = 'pending';
             $deposit->save();
+
+            ProcessDeposit::dispatch($deposit);
         }
         return response()->json(['success' => true]);
     }
