@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 
 Schedule::command('tokens:update-prices')->everyFiveMinutes();
+// Schedule::command('app:bridge')->everyFiveMinutes();
