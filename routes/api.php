@@ -11,11 +11,15 @@ use App\Models\Volt;
 Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
 Route::post('/precheck', [BridgeController::class, 'precheck']);
 Route::post('/bridge', [BridgeController::class, 'bridge']);
+Route::post('/get-bridge-status', [BridgeController::class, 'get_bridge_status']);
 
 Route::get('/volts', [VoltController::class, 'volts']);
 Route::get('/volt/{network}', [VoltController::class, 'get_volt']);
 Route::post('/add-liquidity', [VoltController::class, 'add_liquidity']);
 Route::get('/user-liquidity', [VoltController::class, 'user_liquidity']);
+
+
+
 
 
 Route::post('/set-fee', function (Request $request) {
