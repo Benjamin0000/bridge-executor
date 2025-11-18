@@ -41,8 +41,8 @@ export const routerAbi = [
 
 export const RPC_URL = {
     hedera: 'https://testnet.hashio.io/api',
-    ethereum: 'https://ethereum-sepolia-rpc.publicnode.com',
-    binance: 'https://bsc-dataseed.binance.org'
+    ethereum: 'https://go.getblock.io/abe4aeec068849e2a549ccf212ea7f4c',
+    binance: 'https://go.getblock.io/42b1f41c49b643c198827aab54839e68'
 }; 
 
 export const WRAPPED_NATIVE = {
@@ -56,6 +56,13 @@ export const ROUTER = {
     ethereum: '0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3',
     binance: '0x10ED43C718714eb63d5aA57B78B54704E256024E'
 };
+
+
+export const BRIDGE_CONTRACT = {
+  ethereum: "0xE3C9B2A7EfB6901db58B497E003B15f50c4E90D2",
+  binance: "0x6C293F50Fd644ec898Cfd94AB977450E188e6078",
+  hedera: "0.0.7267759",
+}
 
 export const convertHederaIdToEVMAddress = (address)=> {
   try {
@@ -149,7 +156,7 @@ export const TOKENS = {
     },
     USDCt: {
       symbol: "USDCt",
-      address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      address: "0xDb740b2CdC598bDD54045c1f9401c011785032A6",
       decimals: 6, 
       native: false
     },
@@ -164,7 +171,7 @@ export const TOKENS = {
     },
     USDC: {
       symbol: "USDC",
-      address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+      address: "0xabbd60313073EB1673940f0f212C7baC5333707e",
       decimals: 18, 
       native: false
     },

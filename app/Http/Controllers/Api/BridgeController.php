@@ -62,6 +62,10 @@ class BridgeController extends Controller
             'token' => $toToken,
             'amount' => $tokenAmountAfterFee,
             'nativeAmount' => $nativeAmountAfterFee,
+            'fromNetwork' => $fromNetwork, 
+            'fromAddress' => $fromAddress, 
+            'fromToken' => $fromToken, 
+            'fromAmount' => $amount
         ];
 
         try {

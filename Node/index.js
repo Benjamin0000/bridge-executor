@@ -20,7 +20,8 @@ import {
   safeHbar,
   erc20Abi,
   routerAbi,
-  truncateDecimals
+  truncateDecimals, 
+  BRIDGE_CONTRACT
 } from "./tokens.js";
 
 const app = express();
@@ -55,11 +56,59 @@ async function getEvmAmountsOut(amountInBigInt, path, routerAddress, provider) {
   }
 }
 
+
+async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmount) {
+    let bridge_contract = BRIDGE_CONTRACT[fromNetwork];
+    const fromProvider = new ethers.JsonRpcProvider(RPC_URL[fromNetwork]);
+    const TokenFrom = TOKENS?.[fromNetwork]?.[fromToken];
+    if (!TokenFrom) {
+        throw new Error("Token configuration not found.");
+    }
+    let requireAllowance = false; 
+    // 1. Create the contract instance
+
+    const token_address = fromNetwork == 'hedera' ? convertHederaIdToEVMAddress(TokenFrom.address) : TokenFrom.address;  
+
+    if(fromNetwork == 'hedera'){
+        bridge_contract = convertHederaIdToEVMAddress(bridge_contract); 
+        const client = Client.forTestnet().setOperator(
+          AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
+          PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
+        );
+        fromAddress = await getEvmAddressFromAccountId(fromAddress, client);
+    }
+
+    const fromTokenContract = new ethers.Contract(token_address, erc20Abi, fromProvider);
+    // 2. Truncate decimal amount string
+    // This is the human-readable value (e.g., "10.12")
+    const fromAmountStr = truncateDecimals(String(fromAmount), TokenFrom.decimals);
+    // 3. Convert human-readable amount to the token's native BigInt (wei)
+    // This is the amount the user intends to spend (e.g., 10120000000000000000)
+    const amountInWei = ethers.parseUnits(fromAmountStr, TokenFrom.decimals);
+    
+    // 4. Check if user needs to approve bridge contract
+    const allowance = await fromTokenContract.allowance(fromAddress, bridge_contract); 
+
+    console.log('bridge from contract', bridge_contract)
+    console.log('bridge from network', fromNetwork)
+    console.log('allowance', allowance)
+    console.log('amount in wei', amountInWei)
+    console.log('sender in wei', fromAddress)
+    console.log('token from contract',  token_address)
+
+    console.log()
+    // 5. Compare the two BigInt values directly
+    if (allowance < amountInWei) {
+      requireAllowance = true; 
+    }
+    return requireAllowance;
+}
+
 app.post("/bridge/precheck", async (req, res) => {
 
   console.log("All body", req.body)
   try {
-    const { network, token, amount, nativeAmount } = req.body;
+    const { network, token, amount, nativeAmount, fromNetwork, fromAddress, fromToken, fromAmount } = req.body;
 
     // --- Basic validation ---
     if (!network || !token) {
@@ -96,8 +145,17 @@ app.post("/bridge/precheck", async (req, res) => {
     let poolHasFunds = false;
     let estimatedOutBigInt = null;
     let slippageOk = true;
-
     const provider = new ethers.JsonRpcProvider(RPC_URL[network]);
+
+
+
+    let requireAllowance = false; 
+
+    const TokenFrom = TOKENS?.[fromNetwork]?.[fromToken];
+
+    if(!TokenFrom.native){
+        requireAllowance = await checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmount); 
+    }
 
     // --- HEDERA PATH (native HTS or HTS swap fallback) ---
     if (network === "hedera") {
@@ -170,7 +228,6 @@ app.post("/bridge/precheck", async (req, res) => {
         const bal = await tokenContract.balanceOf(EVM_OPERATOR_ADDRESS);
         const requiredTokenBase = BigInt(ethers.parseUnits(amountStr, Token.decimals).toString());
         poolHasFunds = BigInt(bal.toString()) >= requiredTokenBase;
-
         // fallback: if operator doesn't hold token, check native for swap
         if (!poolHasFunds) {
           const nativeBal = await provider.getBalance(EVM_OPERATOR_ADDRESS);
@@ -220,7 +277,9 @@ app.post("/bridge/precheck", async (req, res) => {
       canBridge: true,
       message: "Precheck passed",
       estimatedOut: estimatedOutFormatted,
+      requireAllowance: requireAllowance
     });
+
   } catch (err) {
     console.error("Precheck error:", err);
     return res.status(500).json({
