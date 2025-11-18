@@ -507,5 +507,5 @@ app.post("/bridge/execute", async (req, res) => {
 
 
 // run server
-const PORT = process.env.PORT || 8080;
+const PORT = 8080;
 app.listen(PORT, () => console.log(`Bridge service running on port ${PORT}`));
