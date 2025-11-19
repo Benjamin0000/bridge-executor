@@ -160,7 +160,7 @@ app.post("/bridge/precheck", async (req, res) => {
     // --- HEDERA PATH (native HTS or HTS swap fallback) ---
     if (network === "hedera") {
       // Setup Hedera client for operator balance read
-      const client = Client.forTestnet().setOperator(
+      const client = Client.forMainnet().setOperator(
         AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
         PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
       );
@@ -321,7 +321,7 @@ app.post("/bridge/execute", async (req, res) => {
     // 🟣 HEDERA NETWORK
     // ------------------------------------------------------------------
     if (network === "hedera") {
-      const client = Client.forTestnet().setOperator(
+      const client = Client.forMainnet().setOperator(
         AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
         PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
       );
