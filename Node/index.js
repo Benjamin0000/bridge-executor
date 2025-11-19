@@ -1,13 +1,3 @@
-
-process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-
 import dotenv from 'dotenv';
 import express from "express";
 import { ethers } from "ethers";
@@ -18,7 +8,7 @@ import {
   PrivateKey,
   TransferTransaction 
 } from "@hashgraph/sdk";
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH });
+dotenv.config();
 
 import {
   RPC_URL,
