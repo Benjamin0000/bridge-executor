@@ -58,6 +58,8 @@ async function getEvmAmountsOut(amountInBigInt, path, routerAddress, provider) {
 
 
 async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmount) {
+
+  console.log(RPC_URL[fromNetwork])
     let bridge_contract = BRIDGE_CONTRACT[fromNetwork];
     const fromProvider = new ethers.JsonRpcProvider(RPC_URL[fromNetwork]);
     const TokenFrom = TOKENS?.[fromNetwork]?.[fromToken];
@@ -105,6 +107,8 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
 }
 
 app.post("/bridge/precheck", async (req, res) => {
+
+  console.log("All body", req.body)
 
   console.log("All body", req.body)
   try {
