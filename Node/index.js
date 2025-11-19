@@ -8,7 +8,7 @@ import {
   PrivateKey,
   TransferTransaction 
 } from "@hashgraph/sdk";
-dotenv.config();
+dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
 
 import {
   RPC_URL,
