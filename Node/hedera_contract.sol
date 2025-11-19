@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+
 // 1. Define the necessary HTS interface (only includes the function we need)
 interface IHederaTokenService {
     function transferToken(
@@ -17,8 +18,8 @@ int constant HEDERA_SUCCESS = 22;
 contract Bridge { 
     IHederaTokenService constant HTS = IHederaTokenService(address(0x167)); 
     
-    // Existing events
-    event BridgeDeposit(
+    // Existing events 
+    event BridgeDeposit( 
         string indexed nonce,
         address indexed from,
         address indexed tokenFrom,
@@ -72,11 +73,11 @@ contract Bridge {
         _;
     }
 
-    constructor(address _poolAddress) {
+    constructor(address _poolAddress, address _owner) {
         require(_poolAddress != address(0), "invalid pool");
-        owner = msg.sender;
+        owner = _owner;
         poolAddress = _poolAddress;
-    }
+    }  
 
     function bridgeDeposit(
         address tokenFrom,
@@ -107,7 +108,7 @@ contract Bridge {
                 poolAddress,
                 amount
             );
-
+ 
             require(
                 response == HEDERA_SUCCESS,
                 "HTS transfer failed"

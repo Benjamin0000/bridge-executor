@@ -71,7 +71,7 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
 
     if(fromNetwork == 'hedera'){
         bridge_contract = convertHederaIdToEVMAddress(bridge_contract); 
-        const client = Client.forTestnet().setOperator(
+        const client = Client.forMainnet().setOperator(
           AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
           PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
         );
