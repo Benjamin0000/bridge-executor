@@ -31,7 +31,16 @@ class UpdateTokenPrices extends Command
 
     public function handle()
     {
-        $tokens = ['ethereum', 'binancecoin', 'hedera-hashgraph', 'calaxy', 'saucerswap']; 
+        $tokens = [
+            'ethereum',
+            'binancecoin',
+            'hedera-hashgraph',
+            'saucerswap',
+            'hashpack',
+            'bitcoin',
+            'tether', 
+            'usd-coin'
+        ]; 
         $prices = $this->coingecko->getPrices($tokens);
 
         foreach ($prices as $token => $data) {

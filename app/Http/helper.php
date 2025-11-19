@@ -29,16 +29,19 @@ function get_token_price($token)
 {
     $SYMBOL_TO_ID = [
         'ETH' => 'ethereum',
+        'WETH' => 'ethereum',
         'BNB' => 'binancecoin',
         'HBAR' => 'hedera-hashgraph',
-        'CLXY' => 'calaxy',
+        'PACK' => 'hashpack',
         'SAUCE' => 'saucerswap',
-        'DAI' => 'dai',
-        'USDCt' => 'usdc',
-        'USDC' => 'usdc',
+        'USDC' => 'usd-coin',
+        'USDT' => 'tether',
+        'WBTC' => 'bitcoin', 
+        'BTCB' => 'bitcoin'
     ];
+
     $price = TokenPrice::where('token', $SYMBOL_TO_ID[$token])->latest()->first();
-    return $price ? $price->price : 1;
+    return $price->price;
 }
 
 function get_native_token_symbol($network)
@@ -48,7 +51,9 @@ function get_native_token_symbol($network)
         'bsc' => 'BNB',
         'binance' => 'BNB',
         'ethereum' => 'ETH',
-        default => null,
+        'optimism' => 'ETH',
+        'base' => 'ETH',
+        'arbitrum' => 'ETH'
     };
 }
 

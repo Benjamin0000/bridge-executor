@@ -8,16 +8,17 @@ use Illuminate\Http\JsonResponse;
 
 class TokenPriceController extends Controller
 {
-    // Map frontend symbols to the CoinGecko IDs stored in DB
     private const SYMBOL_TO_ID = [
         'ETH' => 'ethereum',
+        'WETH' => 'ethereum',
         'BNB' => 'binancecoin',
         'HBAR' => 'hedera-hashgraph',
-        'CLXY' => 'calaxy',
+        'PACK' => 'hashpack',
         'SAUCE' => 'saucerswap',
-        'DAI' => 'dai',
-        'USDCt' => 'usdc', // assuming 'usdc' is stored in DB
-        'USDC' => 'usdc', // assuming 'usdc' is stored in DB
+        'USDC' => 'usd-coin',
+        'USDT' => 'tether',
+        'WBTC' => 'bitcoin', 
+        'BTCB' => 'bitcoin'
     ];
 
     /**
@@ -34,21 +35,9 @@ class TokenPriceController extends Controller
 
             $prices = [];
             foreach (self::SYMBOL_TO_ID as $symbol => $id) {
-                if (isset($pricesFromDb[$id])) {
-                    $prices[$symbol] = $pricesFromDb[$id];
-                } else {
-                    // fallback values for missing tokens
-                    $prices[$symbol] = match($symbol) {
-                        'SAUCE' => 0.00029578,
-                        'DAI' => 2.18,
-                        'USDCt' => 1.00,
-                        default => 1.00,
-                    };
-                }
+                $prices[$symbol] = $pricesFromDb[$id];
             }
-
             return response()->json($prices, 200);
-
         } catch (\Exception $e) {
             \Log::error('Failed to fetch token prices: '.$e->getMessage());
 
