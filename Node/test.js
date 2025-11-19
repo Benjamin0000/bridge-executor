@@ -8,4 +8,4 @@ console.log('Starting bridge server…');
 
 const app = express();
 app.get('/', (req, res) => res.send('Hello'));
-app.listen(8080, () => console.log('Server running'));
+app.listen(3000, () => console.log('Server running'));
