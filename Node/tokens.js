@@ -44,8 +44,8 @@ export const RPC_URL = {
     ethereum: 'https://go.getblock.io/fd4ab7b7e62240edb493a71c07d9e9d9', 
     binance: 'https://go.getblock.io/0263afbf47c248a2a0e0bef0af81abd4',
     base: 'https://base-mainnet.infura.io/v3/12ad8117c11740f6af54d522b1389960', 
-    arbitrum: 'https://arb-mainnet.g.alchemy.com/v2/YQrBekD32SEHZfIK1M9It4L93UA1VjOA',
-    optimism: 'https://opt-mainnet.g.alchemy.com/v2/YQrBekD32SEHZfIK1M9It4L93UA1VjOA', 
+    arbitrum: 'https://arb-mainnet.g.alchemy.com/v2/AgwLNm_azHjH7vD3t65j4',
+    optimism: 'https://opt-mainnet.g.alchemy.com/v2/AgwLNm_azHjH7vD3t65j4', 
 }; 
 
 export const WRAPPED_NATIVE = {
