@@ -483,7 +483,8 @@ app.post("/bridge/execute", async (req, res) => {
         console.log('token paths')
         console.log(path)
 
-        const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000))) / BigInt(1000);
+        // const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(SLIPPAGE_TOLERANCE * 1000))) / BigInt(1000);
+        const amountOutMin = 0; 
         const tx = await router.swapExactETHForTokens(
           amountOutMin,
           path,
