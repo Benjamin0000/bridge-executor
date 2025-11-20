@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Volt extends Model
+class Valt extends Model
 {
     protected $fillable = [
         'network', 

@@ -3,6 +3,7 @@
 use App\Models\Register;
 use App\Models\TokenPrice;
 
+
 function set_register($name, $value="")
 {
     if( $reg = Register::where('name', $name)->first() ){

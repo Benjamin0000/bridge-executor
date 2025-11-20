@@ -9,5 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 
-Schedule::command('tokens:update-prices')->everyFiveMinutes();
-// Schedule::command('app:bridge')->everyFiveMinutes();
+Schedule::command('tokens:update-prices')->everyMinute();
+Schedule::command('app:update-liquidity-balance')->everyMinute();

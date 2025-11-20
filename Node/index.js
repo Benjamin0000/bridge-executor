@@ -4,9 +4,10 @@ import { ethers } from "ethers";
 import {
   Client,
   AccountBalanceQuery,
+  TokenInfoQuery, 
   AccountId,
   PrivateKey,
-  TransferTransaction 
+  TransferTransaction
 } from "@hashgraph/sdk";
 dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
 
@@ -508,6 +509,86 @@ app.post("/bridge/execute", async (req, res) => {
     res.status(500).json({ status: "failed", error: err.message });
   }
 });
+
+
+
+app.get("/balance", async (req, res) => {
+  try {
+    const { network, address, token } = req.query;
+
+    if (!network || !address) {
+      return res.status(400).json({
+        error: "network and address are required"
+      });
+    }
+
+    // ============================
+    //        HEDERA
+    // ============================
+    if (network === "hedera") {
+      const client = Client.forMainnet(); 
+      client.setOperator(
+        AccountId.fromString(HEDERA_OPERATOR_ADDRESS), 
+        PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
+      );
+
+      const bal = await new AccountBalanceQuery()
+        .setAccountId(AccountId.fromString(address))
+        .execute(client);
+
+      // No token → return HBAR balance
+      if (!token) {
+        const hbar = Number(bal.hbars.toTinybars()) / 1e8; // tinybars → HBAR
+        return res.json({ balance: hbar.toString() });
+      }
+
+      // Token balance
+      const tokenId = token;
+      const tokenBalance = bal.tokens.get(tokenId);
+
+      if (!tokenBalance) {
+        return res.json({ balance: "0" });
+      }
+
+      const tokenInfo = await new TokenInfoQuery()
+        .setTokenId(token)
+        .execute(client);
+
+      const decimals = tokenInfo.decimals;
+      const formatted = Number(tokenBalance) / Math.pow(10, decimals);
+
+      return res.json({ balance: formatted.toString() });
+    }
+
+    // ============================
+    //     EVM (ETH / BNB / etc)
+    // ============================
+    const rpc = RPC_URL[network];
+    const provider = new ethers.JsonRpcProvider(rpc);
+
+    if (!token) {
+      const rawBalance = await provider.getBalance(address);
+      const formatted = ethers.formatEther(rawBalance);
+      return res.json({ balance: formatted });
+    }
+
+    const contract = new ethers.Contract(token, erc20Abi, provider);
+    const [rawBalance, decimals] = await Promise.all([
+      contract.balanceOf(address),
+      contract.decimals()
+    ]);
+
+    const formatted = ethers.formatUnits(rawBalance, decimals);
+
+    return res.json({ balance: formatted });
+
+  } catch (err) {
+    return res.status(500).json({
+      error: err.message || "Failed to fetch balance"
+    });
+  }
+});
+
 
 
 // run server

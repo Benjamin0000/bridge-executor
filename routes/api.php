@@ -4,19 +4,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TokenPriceController;
 use App\Http\Controllers\Api\BridgeController;
-use App\Http\Controllers\Api\VoltController;
+use App\Http\Controllers\Api\ValtController;
 use App\Models\Lp;
-use App\Models\Volt;
+use App\Models\Valt;
 
 Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
 Route::post('/precheck', [BridgeController::class, 'precheck']);
 Route::post('/bridge', [BridgeController::class, 'bridge']);
 Route::post('/get-bridge-status', [BridgeController::class, 'get_bridge_status']);
 
-Route::get('/volts', [VoltController::class, 'volts']);
-Route::get('/volt/{network}', [VoltController::class, 'get_volt']);
-Route::post('/add-liquidity', [VoltController::class, 'add_liquidity']);
-Route::get('/user-liquidity', [VoltController::class, 'user_liquidity']);
+Route::get('/valts', [ValtController::class, 'valts']);
+Route::get('/valt/{network}', [ValtController::class, 'get_valt']);
+Route::post('/add-liquidity', [ValtController::class, 'add_liquidity']);
+Route::get('/user-liquidity', [ValtController::class, 'user_liquidity']);
 
 
 
