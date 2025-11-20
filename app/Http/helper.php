@@ -49,12 +49,12 @@ function get_native_token_symbol($network)
 {
     return match($network) {
         'hedera' => 'HBAR',
+        'ethereum' => 'ETH',
         'bsc' => 'BNB',
         'binance' => 'BNB',
-        'ethereum' => 'ETH',
-        'optimism' => 'ETH',
         'base' => 'ETH',
-        'arbitrum' => 'ETH'
+        'arbitrum' => 'ETH',
+        'optimism' => 'ETH',
     };
 }
 
