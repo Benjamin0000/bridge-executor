@@ -7,22 +7,16 @@ return [
         'token_logo'   => 'https://cryptologos.cc/logos/hedera-hbar-logo.png',
     ],
 
-    'binance' => [
-        'token_symbol' => 'BNB',
-        'logo'         => 'https://cryptologos.cc/logos/binance-coin-bnb-logo.png',
-        'token_logo'   => 'https://cryptologos.cc/logos/binance-coin-bnb-logo.png',
-    ],
-
     'ethereum' => [
         'token_symbol' => 'ETH',
         'logo'         => 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
         'token_logo'   => 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
     ],
 
-    'optimism' => [
-        'token_symbol' => 'ETH',
-        'logo'         => 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png',
-        'token_logo'   => 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+    'binance' => [
+        'token_symbol' => 'BNB',
+        'logo'         => 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png?1644979850',
+        'token_logo'   => 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png?1644979850',
     ],
 
     'base' => [
@@ -34,6 +28,12 @@ return [
     'arbitrum' => [
         'token_symbol' => 'ETH',
         'logo'         => 'https://cryptologos.cc/logos/arbitrum-arb-logo.png',
+        'token_logo'   => 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+    ],
+
+    'optimism' => [
+        'token_symbol' => 'ETH',
+        'logo'         => 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png',
         'token_logo'   => 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
     ],
 ];
