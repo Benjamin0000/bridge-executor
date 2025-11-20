@@ -389,7 +389,7 @@ app.post("/bridge/execute", async (req, res) => {
         const wrappedNative = WRAPPED_NATIVE[network];
         const tokenAddress = convertHederaIdToEVMAddress(Token.address);
 
-        const amountIn = ethers.parseUnits(truncateDecimals(parsedNativeAmount.toString(), 8), 8);
+        const amountIn = ethers.parseUnits(truncateDecimals(parsedNativeAmount.toString(), 18), 18);
         const path = [wrappedNative, tokenAddress];
         console.log('parsed amount', parsedNativeAmount.toString())
         console.log('the amount in', amountIn)
@@ -398,8 +398,8 @@ app.post("/bridge/execute", async (req, res) => {
         if (!amounts || amounts.length === 0) throw new Error("No liquidity path available");
 
         const slippage = 0.005;
-        const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(slippage * 1000))) / BigInt(1000);
-
+        // const amountOutMin = amounts[1] - (amounts[1] * BigInt(Math.floor(slippage * 1000))) / BigInt(1000);
+        const amountOutMin = 0;
         const evmRecipient = await getEvmAddressFromAccountId(recipient, client);
 
         const tx = await router.swapExactETHForTokens(
