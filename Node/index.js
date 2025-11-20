@@ -206,7 +206,7 @@ app.post("/bridge/precheck", async (req, res) => {
           const path = [wrappedNativeAddress, tokenOutAddress];
 
           // For Hedera EVM wrapped tokens we use typical 18 decimals on the EVM side
-          const amountInBigInt = BigInt(ethers.parseUnits( truncateDecimals(nativeAmountStr, EVM_NATIVE_DECIMALS), EVM_NATIVE_DECIMALS).toString());
+          const amountInBigInt = BigInt(ethers.parseUnits( truncateDecimals(nativeAmountStr, 8), 8).toString());
           const amounts = await getEvmAmountsOut(amountInBigInt, path, routerAddress, provider);
 
           if (amounts && amounts.length > 1) {
@@ -389,7 +389,7 @@ app.post("/bridge/execute", async (req, res) => {
         const wrappedNative = WRAPPED_NATIVE[network];
         const tokenAddress = convertHederaIdToEVMAddress(Token.address);
 
-        const amountIn = ethers.parseUnits(truncateDecimals(parsedNativeAmount.toString(), 18), 18);
+        const amountIn = ethers.parseUnits(truncateDecimals(parsedNativeAmount.toString(), 8), 8);
         const path = [wrappedNative, tokenAddress];
         console.log('parsed amount', parsedNativeAmount.toString())
         console.log('the amount in', amountIn)
