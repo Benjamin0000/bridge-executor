@@ -18,6 +18,8 @@ Route::get('/valt/{network}', [ValtController::class, 'get_valt']);
 Route::post('/add-liquidity', [ValtController::class, 'add_liquidity']);
 Route::get('/user-liquidity', [ValtController::class, 'user_liquidity']);
 
+Route::get('/mint/{nonce}', [BridgeController::class, 'mint']);
+
 
 
 

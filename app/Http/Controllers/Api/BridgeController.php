@@ -143,4 +143,82 @@ class BridgeController extends Controller
         return response()->json(['success' => true]);
     }
 
+
+    public function mint($nonce)
+    {
+        $deposit = Deposit::where('nonce', $nonce)->first();
+
+        if (!$deposit) {
+            return response()->json(['error' => 'Deposit not found'], 404);
+        }
+
+        // Determine Hedera account
+        $userAccountId = null;
+        if ($deposit->source_chain === "hedera") {
+            $userAccountId = $deposit->depositor;
+        } else if ($deposit->destination_chain === "hedera") {
+            $userAccountId = $deposit->to;
+        }
+
+        if (!$userAccountId) {
+            return response()->json(['error' => 'No Hedera account found for this deposit'], 400);
+        }
+
+        // Prepare data for mint
+        $fromToken = $deposit->token_from;
+        $fromNetwork = $deposit->source_chain;
+        $toToken = $deposit->token_to;
+        $toNetwork = $deposit->destination_chain;
+        $fromAmountText = $deposit->amount_in . ' ' . $fromToken;
+        $toAmountText = $deposit->amount_out . ' ' . $toToken;
+        $timestampLeft = $deposit->created_at->isoFormat('lll');
+        $timestampRight = $deposit->updated_at->isoFormat('lll');
+        $transactionHash = $deposit->release_tx_hash;
+        $bigAmountText = number_format((float)get_token_price($fromToken) * (float)$deposit->amount_in, 3);
+        $sessionId = $nonce;
+
+        // Build payload for Node /mint
+        $payload = [
+            'userAccountId' => $userAccountId,
+            'fromToken' => $fromToken,
+            'fromNetwork' => $fromNetwork,
+            'toToken' => $toToken,
+            'toNetwork' => $toNetwork,
+            'fromAmountText' => $fromAmountText,
+            'toAmountText' => $toAmountText,
+            'timestampLeft' => $timestampLeft,
+            'timestampRight' => $timestampRight,
+            'transactionHash' => $transactionHash,
+            'bigAmountText' => $bigAmountText,
+            'sessionId' => $sessionId,
+        ];
+
+        try {
+            $response = Http::timeout(20)
+                ->post(env('LOCALHOST_URL', 'http://localhost:7000') . '/mint', $payload);
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Node bridge mint failed.',
+                    'details' => $response->body(),
+                ], 500);
+            }
+
+            $nodeResponse = $response->json();
+
+            return response()->json([
+                'success' => true,
+                'nodeResponse' => $nodeResponse
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Mint request error: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
 }
