@@ -169,12 +169,12 @@ class BridgeController extends Controller
         $fromNetwork = $deposit->source_chain;
         $toToken = $deposit->token_to;
         $toNetwork = $deposit->destination_chain;
-        $fromAmountText = $deposit->amount_in . ' ' . $fromToken;
-        $toAmountText = $deposit->amount_out . ' ' . $toToken;
+        $fromAmountText = number_format($deposit->amount_in, 2) . ' ' . $fromToken;
+        $toAmountText = number_format($deposit->amount_out, 2) . ' ' . $toToken;
         $timestampLeft = $deposit->created_at->isoFormat('lll');
         $timestampRight = $deposit->updated_at->isoFormat('lll');
         $transactionHash = $deposit->release_tx_hash;
-        $bigAmountText = number_format((float)get_token_price($fromToken) * (float)$deposit->amount_in, 3);
+        $bigAmountText = number_format((float)get_token_price($fromToken) * (float)$deposit->amount_in, 3) . ' USDT';
         $sessionId = $nonce;
 
         // Build payload for Node /mint
