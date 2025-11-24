@@ -13,7 +13,7 @@ class ValtController extends Controller
 
     public function valts()
     {
-        Artisan::call('app:update-liquidity-balance');
+        // Artisan::call('app:update-liquidity-balance');
 
         $valts = Valt::all();
         $networkMeta = config('networks');
@@ -61,8 +61,8 @@ class ValtController extends Controller
      */
     public function get_valt($network)
     {
-        Artisan::call('app:update-liquidity-balance');
-        
+        // Artisan::call('app:update-liquidity-balance');
+
         $valt = Valt::where('network', $network)->first();
 
         if (!$valt) {

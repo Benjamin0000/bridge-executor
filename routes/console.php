@@ -10,4 +10,4 @@ Artisan::command('inspire', function () {
 
 
 Schedule::command('tokens:update-prices')->everyMinute();
-// Schedule::command('app:update-liquidity-balance')->everyMinute();
+Schedule::command('app:update-liquidity-balance')->everyMinute();
