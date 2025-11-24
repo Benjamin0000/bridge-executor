@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Valt;
 use App\Models\Lp;
+use Illuminate\Support\Facades\Artisan;
 
 class ValtController extends Controller
 {
 
     public function valts()
     {
+        Artisan::call('app:update-liquidity-balance');
+
         $valts = Valt::all();
         $networkMeta = config('networks');
 
@@ -58,6 +61,8 @@ class ValtController extends Controller
      */
     public function get_valt($network)
     {
+        Artisan::call('app:update-liquidity-balance');
+        
         $valt = Valt::where('network', $network)->first();
 
         if (!$valt) {
