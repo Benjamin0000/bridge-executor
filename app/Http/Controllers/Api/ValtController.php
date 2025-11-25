@@ -142,10 +142,7 @@ class ValtController extends Controller
                     ]);
                     continue;
                 }
-
-                $rawValue = $tx['value'] ?? 0;
-                $decimals = $tx['rawContract']['decimals'] ?? 18;
-                $amount = floatval($rawValue) / (10 ** $decimals);
+                $amount = floatval($tx['value']);
 
                 if ($amount <= 0) continue;
 

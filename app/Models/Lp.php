@@ -18,5 +18,6 @@ class Lp extends Model
         'amount' => 'float',
         'profit' => 'float',
         'active' => 'boolean',
+        'hashes' => 'array',
     ];
 }
