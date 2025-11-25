@@ -109,8 +109,8 @@ public function add_liquidity(Request $request)
         'ETH_MAINNET'      => 'ethereum',
         'BSC_MAINNET'      => 'binance',
         'BASE_MAINNET'     => 'base',
-        'ARBITRUM_MAINNET' => 'arbitrum',
-        'OPTIMISM_MAINNET' => 'optimism',
+        'ARB_MAINNET' => 'arbitrum',
+        'OPT_MAINNET' => 'optimism',
     ];
 
     $monitoredAddresses = [
