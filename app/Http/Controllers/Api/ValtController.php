@@ -102,7 +102,93 @@ class ValtController extends Controller
         ]);
     }
 
-public function add_liquidity(Request $request)
+    public function add_liquidity(Request $request)
+    {
+        
+        $request->validate([
+            'wallet_address' => 'required|string',
+            'network'        => 'required|string',
+            'amount'         => 'required|numeric|min:0',
+            'txId'           => 'required|string'
+        ]);
+
+    
+        $wallet = $request->wallet_address;
+        $network = $request->network;
+        $amount = $request->amount;
+        $hash = $request->txId;
+
+        if($network != 'hedera') return; 
+
+         if (DepHash::where('value', $hash)->exists()) return;
+
+        // Find the valt corresponding to the network
+        $valt = Valt::where('network', $network)->first();
+
+        if (!$valt) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Valt does not exist for this network.'
+            ], 404);
+        }
+
+        // Get active LP entry for this wallet + network
+        $lp = Lp::where('wallet_address', $wallet)
+                ->where('network', $network)
+                ->where('active', true)
+                ->first();
+
+        if ($lp) {
+            // Update amount
+            $lp->amount += $amount;
+
+            // Add hash into JSON column
+            $hashes = $lp->hashes ?? [];
+            $hashes[] = [
+                'amount' => $amount,
+                'hash'   => $hash,
+                'timestamp' => now()->timestamp
+            ];
+            $lp->hashes = $hashes;
+
+            $lp->save();
+
+        } else {
+            // Create a new active LP
+            $lp = Lp::create([
+                'wallet_address' => $wallet,
+                'network'        => $network,
+                'amount'         => $amount,
+                'profit'         => 0,
+                'active'         => true,
+                'hashes'         => [
+                    [
+                        'amount' => $amount,
+                        'hash'   => $hash,
+                        'timestamp' => now()->timestamp
+                    ]
+                ]
+            ]);
+        }
+
+        /**
+         * UPDATE THE VALT VALUES
+         */
+        $valt->tvl += $amount;     // Increase total liquidity inside valt
+        $valt->total += $amount;   // Increase total deposit tracking
+        $valt->save();
+
+         DepHash::create(['value' => $hash]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Liquidity added successfully.',
+            'lp' => $lp,
+            'valt' => $valt
+        ]);
+    }
+
+public function add_liquidity_from_alchemy(Request $request)
 {
     // Map Alchemy network names to internal network names
     $alchemyNetworkMap = [
@@ -241,8 +327,6 @@ public function add_liquidity(Request $request)
 
     return response()->json(['success' => true, 'message' => 'Processed native deposits from Alchemy webhook']);
 }
-
-
 
 
 

@@ -16,6 +16,8 @@ Route::post('/get-bridge-status', [BridgeController::class, 'get_bridge_status']
 Route::get('/valts', [ValtController::class, 'valts']);
 Route::get('/valt/{network}', [ValtController::class, 'get_valt']);
 Route::post('/add-liquidity', [ValtController::class, 'add_liquidity']);
+Route::post('/add-liquidity-al', [ValtController::class, 'add_liquidity_from_alchemy']);
+
 Route::get('/user-liquidity', [ValtController::class, 'user_liquidity']);
 
 Route::get('/mint/{nonce}', [BridgeController::class, 'mint']);
