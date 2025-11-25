@@ -104,7 +104,7 @@ class ValtController extends Controller
 
 public function add_liquidity(Request $request)
 {
-    // Map Alchemy network names to your internal network names
+    // Map Alchemy network names to internal network names
     $alchemyNetworkMap = [
         'ETH_MAINNET'      => 'ethereum',
         'BSC_MAINNET'      => 'binance',
@@ -113,7 +113,6 @@ public function add_liquidity(Request $request)
         'OPTIMISM_MAINNET' => 'optimism',
     ];
 
-    // Monitored deposit addresses per network
     $monitoredAddresses = [
         'ethereum' => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
         'binance'  => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
@@ -123,7 +122,6 @@ public function add_liquidity(Request $request)
     ];
 
     $alchemyNetwork = $request->input('event.network');
-
     if (!isset($alchemyNetworkMap[$alchemyNetwork])) {
         \Log::warning("Unknown network from Alchemy: $alchemyNetwork", $request->all());
         return response()->json(['success' => false, 'message' => 'Unknown network'], 400);
@@ -134,20 +132,18 @@ public function add_liquidity(Request $request)
 
     foreach ($request->input('event.activity', []) as $tx) {
         try {
-            $from   = strtolower($tx['fromAddress']);
-            $to     = strtolower($tx['toAddress']);
-            $txId   = $tx['hash'];
-            $asset  = strtoupper($tx['asset'] ?? 'ETH');
-            $category = strtolower($tx['category'] ?? ''); // coin/token
+            $from     = strtolower($tx['fromAddress']);
+            $to       = strtolower($tx['toAddress']);
+            $txId     = $tx['hash'];
+            $asset    = strtoupper($tx['asset'] ?? 'ETH');
+            $category = strtolower($tx['category'] ?? '');
 
-            // Skip duplicate transactions
-            if (DepHash::where('value', $txId)->exists()) {
-                continue;
-            }
+            // Skip duplicates
+            if (DepHash::where('value', $txId)->exists()) continue;
 
-            // Only process incoming deposits (to the monitored address)
+            // Only process incoming deposits to monitored address
             if ($to !== $monitoredAddress) {
-                \Log::info("Ignored outgoing/other transaction", [
+                \Log::info("Ignored non-deposit transaction", [
                     'network' => $network,
                     'txId'    => $txId,
                     'from'    => $from,
@@ -156,9 +152,18 @@ public function add_liquidity(Request $request)
                 continue;
             }
 
-            // Only process native coin deposits (ignore tokens)
-            if ($category !== 'coin') {
-                \Log::info("Ignored non-native token transfer", [
+            // Only native coin deposits: Alchemy uses 'coin' or 'external' for ETH/BNB
+            $isNative = in_array($category, ['coin', 'external']) &&
+                        (
+                            ($network === 'ethereum' && $asset === 'ETH') ||
+                            ($network === 'binance'  && $asset === 'BNB') ||
+                            ($network === 'base'     && $asset === 'ETH') ||
+                            ($network === 'arbitrum' && $asset === 'ETH') ||
+                            ($network === 'optimism' && $asset === 'ETH')
+                        );
+
+            if (!$isNative) {
+                \Log::info("Ignored non-native token deposit", [
                     'network' => $network,
                     'txId'    => $txId,
                     'asset'   => $asset,
@@ -210,11 +215,12 @@ public function add_liquidity(Request $request)
                 ]);
             }
 
-            $valt->tvl   += $amount;
+            // Update valt totals
+            $valt->tvl += $amount;
             $valt->total += $amount;
             $valt->save();
 
-            // Mark transaction as processed
+            // Save tx hash to prevent double recording
             DepHash::create(['value' => $txId]);
 
             \Log::info("Native deposit recorded", [
@@ -235,6 +241,7 @@ public function add_liquidity(Request $request)
 
     return response()->json(['success' => true, 'message' => 'Processed native deposits from Alchemy webhook']);
 }
+
 
 
 
