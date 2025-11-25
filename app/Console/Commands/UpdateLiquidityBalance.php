@@ -47,7 +47,7 @@ class UpdateLiquidityBalance extends Command
                     $data = $response->json();
 
                     // Extract the HBAR balance
-                    $balance = $data['balance']['balance']/10e8 ?? 0;
+                    $balance = $data['balance']['balance']/10**8 ?? 0;
 
                 } else {
                     // For EVM networks, use the NodeJS backend
