@@ -107,7 +107,7 @@ public function add_liquidity(Request $request)
     // Map Alchemy network names to internal network names
     $alchemyNetworkMap = [
         'ETH_MAINNET'      => 'ethereum',
-        'BSC_MAINNET'      => 'binance',
+        'BNB_MAINNET'      => 'binance',
         'BASE_MAINNET'     => 'base',
         'ARB_MAINNET' => 'arbitrum',
         'OPT_MAINNET' => 'optimism',
