@@ -15,8 +15,6 @@ class UpdateLiquidityBalance extends Command
     {
         $this->info("🔄 Updating network liquidity...");
 
-        $nodeEndpoint = env('NODE_BRIDGE_URL') . "/balance";
-
         $evmAddress    = env('EVM_OPERATOR_ADDRESS');
         $hederaAddress = env('HEDERA_OPERATOR_ADDRESS');
 
@@ -35,18 +33,38 @@ class UpdateLiquidityBalance extends Command
             $this->line("🔍 Fetching balance for {$networkName} using {$wallet}...");
 
             try {
-                // Call NodeJS balance endpoint
-                $response = Http::get($nodeEndpoint, [
-                    'network' => $networkName,
-                    'address' => $wallet
-                ]);
+                if ($networkName === 'hedera') {
+                    // Query the Hedera mirror node directly
+                    $mirrorNodeUrl = "https://mainnet.mirrornode.hedera.com/api/v1/accounts/{$wallet}";
 
-                if (!$response->successful()) {
-                    $this->error("❌ NodeJS request failed for {$networkName}");
-                    continue;
+                    $response = Http::get($mirrorNodeUrl);
+
+                    if (!$response->successful()) {
+                        $this->error("❌ Mirror node request failed for Hedera");
+                        continue;
+                    }
+
+                    $data = $response->json();
+
+                    // Extract the HBAR balance
+                    $balance = $data['balance']['balance'] ?? 0;
+
+                } else {
+                    // For EVM networks, use the NodeJS backend
+                    $nodeEndpoint = env('NODE_BRIDGE_URL') . "/balance";
+
+                    $response = Http::get($nodeEndpoint, [
+                        'network' => $networkName,
+                        'address' => $wallet
+                    ]);
+
+                    if (!$response->successful()) {
+                        $this->error("❌ NodeJS request failed for {$networkName}");
+                        continue;
+                    }
+
+                    $balance = $response->json('balance') ?? 0;
                 }
-
-                $balance = $response->json('balance') ?? 0;
 
                 // Find or create Valt entry
                 $valt = Valt::firstOrCreate(
@@ -70,4 +88,5 @@ class UpdateLiquidityBalance extends Command
 
         $this->info("🎉 Liquidity update completed.");
     }
+
 }
