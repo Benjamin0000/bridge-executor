@@ -107,11 +107,8 @@ class ValtController extends Controller
     public function add_liquidity(Request $request)
     {
 
-        \Log::channel('daily')->info('Add Liquidity Request', [
-            'ip'         => $request->ip(),
-            'headers'    => $request->headers->all(),
-            'body'       => $request->all(),
-        ]);
+         \Log::info("Webhook received", $request->all());
+            return ['status' => 'ok'];
 
         $request->validate([
             'wallet_address' => 'required|string',
