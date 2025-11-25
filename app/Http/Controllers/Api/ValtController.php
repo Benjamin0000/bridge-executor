@@ -101,95 +101,119 @@ class ValtController extends Controller
         ]);
     }
 
-    /**
-     * Add liquidity into LP + update the valt accordingly
-     */
     public function add_liquidity(Request $request)
     {
+        // Map Alchemy network names to your internal network names
+        $alchemyNetworkMap = [
+            'ETH_MAINNET'      => 'ethereum',
+            'BSC_MAINNET'      => 'binance',
+            'BASE_MAINNET'     => 'base',
+            'ARBITRUM_MAINNET' => 'arbitrum',
+            'OPTIMISM_MAINNET' => 'optimism',
+        ];
 
-        \Log::channel('daily')->info('Add Liquidity Request', [
-            'ip'         => $request->ip(),
-            'headers'    => $request->headers->all(),
-            'body'       => $request->all(),
-        ]);
-        return ['status' => 'ok'];
+        $alchemyNetwork = $request->input('event.network');
 
-
-        $request->validate([
-            'wallet_address' => 'required|string',
-            'network'        => 'required|string',
-            'amount'         => 'required|numeric|min:0',
-            'txId'           => 'required|string'
-        ]);
-
-        $wallet = $request->wallet_address;
-        $network = $request->network;
-        $amount = $request->amount;
-        $hash = $request->txId;
-
-        // Find the valt corresponding to the network
-        $valt = Valt::where('network', $network)->first();
-
-        if (!$valt) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Valt does not exist for this network.'
-            ], 404);
+        if (!isset($alchemyNetworkMap[$alchemyNetwork])) {
+            \Log::warning("Unknown network from Alchemy: $alchemyNetwork", $request->all());
+            return response()->json(['success'=>false, 'message'=>'Unknown network'], 400);
         }
 
-        // Get active LP entry for this wallet + network
-        $lp = Lp::where('wallet_address', $wallet)
-                ->where('network', $network)
-                ->where('active', true)
-                ->first();
+        $network = $alchemyNetworkMap[$alchemyNetwork];
 
-        if ($lp) {
-            // Update amount
-            $lp->amount += $amount;
+        foreach ($request->input('event.activity', []) as $tx) {
+            try {
+                $wallet = $tx['fromAddress'];
+                $txId = $tx['hash'];
+                $asset = strtoupper($tx['asset'] ?? 'ETH');
 
-            // Add hash into JSON column
-            $hashes = $lp->hashes ?? [];
-            $hashes[] = [
-                'amount' => $amount,
-                'hash'   => $hash,
-                'timestamp' => now()->timestamp
-            ];
-            $lp->hashes = $hashes;
+                // Only process native coin deposits
+                if (
+                    ($network === 'ethereum' && $asset !== 'ETH') ||
+                    ($network === 'binance'  && $asset !== 'BNB') ||
+                    ($network === 'base'     && $asset !== 'ETH') ||
+                    ($network === 'arbitrum' && $asset !== 'ETH') ||
+                    ($network === 'optimism' && $asset !== 'ETH')
+                ) {
+                    \Log::info("Ignored non-native token deposit", [
+                        'network' => $network,
+                        'asset' => $asset,
+                        'txId' => $txId
+                    ]);
+                    continue;
+                }
 
-            $lp->save();
+                $rawValue = $tx['value'] ?? 0;
+                $decimals = $tx['rawContract']['decimals'] ?? 18;
+                $amount = floatval($rawValue) / (10 ** $decimals);
 
-        } else {
-            // Create a new active LP
-            $lp = Lp::create([
-                'wallet_address' => $wallet,
-                'network'        => $network,
-                'amount'         => $amount,
-                'profit'         => 0,
-                'active'         => true,
-                'hashes'         => [
-                    [
+                if ($amount <= 0) continue;
+
+                $valt = Valt::where('network', $network)->first();
+                if (!$valt) {
+                    \Log::warning("Valt not found for network: $network");
+                    continue;
+                }
+
+                $lp = Lp::where('wallet_address', $wallet)
+                        ->where('network', $network)
+                        ->where('active', true)
+                        ->first();
+
+                if ($lp) {
+                    $lp->amount += $amount;
+
+                    $hashes = $lp->hashes ?? [];
+                    $hashes[] = [
                         'amount' => $amount,
-                        'hash'   => $hash,
+                        'hash'   => $txId,
+                        'asset'  => $asset,
                         'timestamp' => now()->timestamp
-                    ]
-                ]
-            ]);
+                    ];
+                    $lp->hashes = $hashes;
+
+                    $lp->save();
+                } else {
+                    $lp = Lp::create([
+                        'wallet_address' => $wallet,
+                        'network'        => $network,
+                        'amount'         => $amount,
+                        'profit'         => 0,
+                        'active'         => true,
+                        'hashes'         => [
+                            [
+                                'amount'    => $amount,
+                                'hash'      => $txId,
+                                'asset'     => $asset,
+                                'timestamp' => now()->timestamp
+                            ]
+                        ]
+                    ]);
+                }
+
+                $valt->tvl += $amount;
+                $valt->total += $amount;
+                $valt->save();
+
+                \Log::info("Native token deposit recorded", [
+                    'wallet' => $wallet,
+                    'network'=> $network,
+                    'amount' => $amount,
+                    'txId'   => $txId,
+                    'asset'  => $asset
+                ]);
+
+            } catch (\Exception $e) {
+                \Log::error("Failed to process Alchemy deposit", [
+                    'error' => $e->getMessage(),
+                    'tx'    => $tx
+                ]);
+            }
         }
 
-        /**
-         * UPDATE THE VALT VALUES
-         */
-        $valt->tvl += $amount;     // Increase total liquidity inside valt
-        $valt->total += $amount;   // Increase total deposit tracking
-        $valt->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Liquidity added successfully.',
-            'lp' => $lp,
-            'valt' => $valt
-        ]);
+        return response()->json(['success'=>true, 'message'=>'Processed native deposits from Alchemy webhook']);
     }
+
 
     /**
      * Return all LP liquidity data for a user per network
