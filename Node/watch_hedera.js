@@ -2,49 +2,46 @@ import axios from 'axios';
 
 const MONITORED_ACCOUNT = '0.0.10115610';
 const BACKEND_URL = 'https://hedera-api.kivon.io/api/add-liquidity';
-let lastTimestamp = null; // For pagination
+let lastTimestamp = null;
 
 async function pollHederaDeposits() {
   try {
     let url = `https://mainnet-public.mirrornode.hedera.com/api/v1/transactions?account.id=${MONITORED_ACCOUNT}&limit=10&order=desc`;
-    if (lastTimestamp) {
-      url += `&timestamp=gt:${lastTimestamp}`;
-    }
+    if (lastTimestamp) url += `&timestamp=gt:${lastTimestamp}`;
 
     const { data } = await axios.get(url);
 
     for (const tx of data.transactions) {
-      const txId = tx.transaction_id;
       const transfers = tx.transfers;
+      if (!transfers || transfers.length === 0) continue;
 
-      // Find the deposit to our account
+      // Deposit record (our account must receive positive)
       const deposit = transfers.find(t => t.account === MONITORED_ACCOUNT && t.amount > 0);
       if (!deposit) continue;
 
-      // Sender can be inferred as any negative amount in the same tx (or use 'unknown')
-      const sender = transfers.find(t => t.account !== MONITORED_ACCOUNT && t.amount < 0)?.account || 'unknown';
+      // Sender = account with negative amount
+      const sender = transfers.find(t => t.amount < 0 && t.account !== MONITORED_ACCOUNT)?.account || 'unknown';
+
       const amountHbar = deposit.amount / 1e8;
 
-      // Send to backend
+      console.log(`📥 Deposit detected: ${amountHbar} HBAR from ${sender}`);
+
       await axios.post(BACKEND_URL, {
         wallet_address: sender,
         network: 'hedera',
         amount: amountHbar,
-        txId: txId
+        txId: tx.transaction_id
       });
-
-      console.log(`Deposit recorded: ${amountHbar} HBAR from ${sender}`);
     }
 
-    // Update last timestamp
+    // Track last seen timestamp
     if (data.transactions.length > 0) {
       lastTimestamp = data.transactions[0].consensus_timestamp;
     }
 
   } catch (err) {
-    console.error('Error polling Hedera deposits:', err.message);
+    console.error("Error polling Hedera deposits:", err.message);
   }
 }
 
-// Poll every 10s
-setInterval(pollHederaDeposits, 10000);
+setInterval(pollHederaDeposits, 5000);
