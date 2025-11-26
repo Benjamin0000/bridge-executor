@@ -331,10 +331,6 @@ app.post("/bridge/execute", async (req, res) => {
         PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
       );
 
-      client.setMaxAttempts(20);    // default is 10
-      client.setMinBackoff(1000);   // 1 second
-      client.setMaxBackoff(8000);   // 8 seconds
-
       const poolBal = await new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
         .execute(client);
@@ -597,5 +593,5 @@ app.get("/balance", async (req, res) => {
 
 
 // run server
-const PORT = 3001;
+const PORT = 5001;
 app.listen(PORT, () => console.log(`Bridge service running on port ${PORT}`));
