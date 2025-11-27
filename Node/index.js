@@ -170,9 +170,9 @@ app.post("/bridge/precheck", async (req, res) => {
         PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
       );
 
-      client.setDefaultMaxBackoff(0);
-      client.setDefaultMinBackoff(0);
-      client.setMaxAttempts(1);
+      // client.setDefaultMaxBackoff(0);
+      // client.setDefaultMinBackoff(0);
+      // client.setMaxAttempts(1);
 
 
       const poolBal = await new AccountBalanceQuery()
