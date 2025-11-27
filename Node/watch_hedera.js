@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const MONITORED_ACCOUNT = '0.0.10115610';
+const MONITORED_ACCOUNT = '0.0.10145769';
 const BACKEND_URL = 'https://hedera-api.kivon.io/api/add-liquidity';
 let lastTimestamp = null;
 
