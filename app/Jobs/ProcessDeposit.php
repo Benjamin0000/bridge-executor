@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use App\Models\Deposit;
 use Exception;
 use App\Models\Lp;
@@ -60,7 +61,8 @@ class ProcessDeposit implements ShouldQueue
             $result = $response->json();
 
             if ($response->successful() && isset($result['txHash'])) {
-                $this->info("✅ Execution complete. TX Hash: {$result['txHash']}"); 
+                Log::info("✅ Execution complete. TX Hash: {$result['txHash']}");
+                // $this->info("✅ Execution complete. TX Hash: {$result['txHash']}"); 
                 // Update database
                 $deposit->status = "completed";
                 $deposit->release_tx_hash = $result['txHash'];

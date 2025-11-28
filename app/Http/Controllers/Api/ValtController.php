@@ -200,11 +200,11 @@ public function add_liquidity_from_alchemy(Request $request)
     ];
 
     $monitoredAddresses = [
-        'ethereum' => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
-        'binance'  => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
-        'base'     => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
-        'arbitrum' => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
-        'optimism' => '0xf10ee4cf289d2f6b53a90229ce16b8646e724418',
+        'ethereum' => '0xe0f537e3815a8ae3e8aa64b176d8c0ec5cee519e',
+        'binance'  => '0xe0f537e3815a8ae3e8aa64b176d8c0ec5cee519e',
+        'base'     => '0xe0f537e3815a8ae3e8aa64b176d8c0ec5cee519e',
+        'arbitrum' => '0xe0f537e3815a8ae3e8aa64b176d8c0ec5cee519e',
+        'optimism' => '0xe0f537e3815a8ae3e8aa64b176d8c0ec5cee519e',
     ];
 
     $alchemyNetwork = $request->input('event.network');
