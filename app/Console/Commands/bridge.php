@@ -5,8 +5,10 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use App\Models\Deposit;
+use App\Models\Lp;
+use App\Models\Valt;
 
-class bridge extends Command
+class Bridge extends Command
 {
     protected $signature = 'app:bridge';
     protected $description = 'Execute token bridge operations';
@@ -50,6 +52,43 @@ class bridge extends Command
                     $pending->status = "completed";
                     $pending->release_tx_hash = $result['txHash'];
                     $pending->save();
+
+
+                    $feePct = (float)get_register('fee_pct') / 100;
+                    $lpPct = (float)get_register('lp_fee_pct') / 100;
+                    $adminPct = 1 - $lpPct; 
+
+                    $netAmount = $pending->dest_native_amt;
+                    // Calculate the fee amount from net_amount
+                    $feeAmount = ($netAmount * $feePct) / (1 - $feePct);
+
+                    // Store admin fee in register
+                    $adminFee = (float)get_register('total_fee'); 
+                    $adminFee +=  $feeAmount * $adminPct;
+
+                    $activeLps = Lp::where([ ['active', true], ['network', $pending->destination_chain] ])->get();
+
+                    if( !$activeLps->isEmpty() ){
+                        // lp_fee_pct% of the total fee will be distributed among active LPs
+                        $distributableFee = $feeAmount * $lpPct;
+                        // Total active liquidity
+                        $totalLiquidity = $activeLps->sum('amount');
+
+                        if ($totalLiquidity > 0) {
+                            foreach ($activeLps as $lp) {
+                                // proportional profit = (lp.amount / totalLiquidity) * distributableFee
+                                $profitShare = ($lp->amount / $totalLiquidity) * $distributableFee;
+                                $lp->profit += $profitShare;
+                                $lp->save();
+                            }
+                        }
+                    }
+                    $valt = Valt::where('network_slug', $pending->destination_chain)->first(); 
+                    if($valt){
+                        $valt->fees_generated += $feeAmount;
+                        $valt->profit += $feeAmount;
+                        $valt->save();
+                    }
                 } else {
                     $this->error("❌ NodeJS execution failed");
                     $this->error(json_encode($result));

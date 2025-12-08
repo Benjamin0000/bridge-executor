@@ -107,6 +107,52 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
     return requireAllowance;
 }
 
+
+/**
+ * Executes an asynchronous function and retries it with exponential backoff 
+ * if it throws an error.
+ * * @param {Function} asyncOperation The function that returns a Promise (e.g., your .execute(client) call).
+ * @param {number} maxAttempts The maximum number of total attempts (initial + retries).
+ * @param {number} baseDelayMs The base delay in milliseconds (e.g., 500ms).
+ */
+async function retryWithBackoff(asyncOperation, maxAttempts = 5, baseDelayMs = 500) {
+    let attempt = 1;
+
+    while (attempt <= maxAttempts) {
+        try {
+            // 1. Attempt the operation
+            return await asyncOperation();
+        } catch (error) {
+            // 2. Check the error type and attempt limit
+            // You can optionally check for error.message.includes('BUSY') here if you want 
+            // to only retry on specific Hedera errors, but retrying all transient errors is usually safe.
+            
+            if (attempt === maxAttempts) {
+                console.error(`Operation failed after ${maxAttempts} attempts. Last error:`, error.message);
+                throw error; // Re-throw the final error
+            }
+
+            // 3. Calculate the delay with exponential backoff and jitter
+            // Delay = (BaseDelay * 2^attempt) + Jitter(0ms to 1000ms)
+            const backoffDelay = baseDelayMs * Math.pow(2, attempt - 1);
+            const jitter = Math.random() * 1000;
+            const delayMs = Math.floor(backoffDelay + jitter);
+            
+            console.warn(`Attempt ${attempt} failed. Retrying in ${delayMs / 1000} seconds...`);
+            
+            // 4. Wait for the calculated delay
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+
+            attempt++;
+        }
+    }
+}
+
+// Helper function for the wait period
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 app.post("/bridge/precheck", async (req, res) => {
 
   console.log("All body", req.body)
@@ -165,14 +211,26 @@ app.post("/bridge/precheck", async (req, res) => {
     // --- HEDERA PATH (native HTS or HTS swap fallback) ---
     if (network === "hedera") {
       // Setup Hedera client for operator balance read
-      const client = Client.forMainnet().setOperator(
+      const client = Client.forNetwork({ "80.85.70.197:50212":"0.0.29" }).setOperator(
         AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
         PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
       );
 
-      const poolBal = await new AccountBalanceQuery()
-        .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
-        .execute(client);
+
+      // const poolBal = await retryWithBackoff(
+      //   // Pass the query operation as an anonymous async function
+      //   async () => {
+            const poolBal = await new AccountBalanceQuery()
+                .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
+                .execute(client);
+        // },
+        // 15, // Set max attempts higher, e.g., 15 (initial + 14 retries)
+        // 1000 // Set base delay to 1000ms (1 second)
+    
+
+      // const poolBal = await new AccountBalanceQuery()
+      //   .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
+      //   .execute(client);
 
       // Convert HBAR balance to tinybars BigInt
       const poolHbarTinybars = BigInt(poolBal.hbars.toTinybars().toString());

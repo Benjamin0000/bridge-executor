@@ -80,8 +80,9 @@ class BridgeController extends Controller
                 ], 500);
             }
             $nodeResponse = $response->json();
+            $nonce = generateNounce();
             $deposit = Deposit::create([
-                'nonce' => generateNounce(),
+                'nonce' => $nonce,
                 'depositor' => $fromAddress,
                 'token_from' => $fromToken,
                 'token_to' => $toToken,
@@ -92,7 +93,8 @@ class BridgeController extends Controller
                 'source_chain' => $fromNetwork,
                 'destination_chain' => $toNetwork,
                 'status' => 'none',
-                'dest_native_amt' => $nativeAmountAfterFee 
+                'dest_native_amt' => $nativeAmountAfterFee, 
+                'nonce_hash'=>keccak256($nonce)
             ]);
 
             return response()->json([
@@ -115,14 +117,14 @@ class BridgeController extends Controller
 
     public function bridge(Request $request)
     {
-  
-        $nonce = $request->input('nonce');
-        $deposit = Deposit::where('nonce', $nonce)->first();
-
-        if($deposit->status == 'none'){
+        $eventNonce = $request->input('nonceHash');
+        $deposit = Deposit::where('nonce_hash', $eventNonce)
+                    ->where('status', 'none')
+                    ->first();
+        if($deposit){
             $deposit->status = 'pending';
+            $deposit->tx_hash = $request->input('txHash');
             $deposit->save();
-
             ProcessDeposit::dispatch($deposit);
         }
         return response()->json(['success' => true]);
