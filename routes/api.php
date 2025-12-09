@@ -127,83 +127,83 @@ Route::post('/distribute-fee', function (Request $request) {
 
 
 
-Route::post('/update-withdrawal', function (Request $request) {
-    // $request->validate([
-    //     'recipient' => 'required|string',
-    //     'amount' => 'required|numeric|min:0.000000000000000001',
-    //     'type' => 'required|string|in:user,admin',
-    // ]);
+// Route::post('/update-withdrawal', function (Request $request) {
+//     // $request->validate([
+//     //     'recipient' => 'required|string',
+//     //     'amount' => 'required|numeric|min:0.000000000000000001',
+//     //     'type' => 'required|string|in:user,admin',
+//     // ]);
 
-    $recipient = $request->recipient;
-    $amount = (float) $request->amount;
-    $type = strtolower($request->type);
+//     $recipient = $request->recipient;
+//     $amount = (float) $request->amount;
+//     $type = strtolower($request->type);
 
-    try {
-        if ($type === 'user') {
-            // 🧾 Find the LP record by wallet address
-            $lp = Lp::where('wallet_address', $recipient)->first();
+//     try {
+//         if ($type === 'user') {
+//             // 🧾 Find the LP record by wallet address
+//             $lp = Lp::where('wallet_address', $recipient)->first();
 
-            if (!$lp) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Liquidity provider not found.',
-                ], 404);
-            }
+//             if (!$lp) {
+//                 return response()->json([
+//                     'success' => false,
+//                     'message' => 'Liquidity provider not found.',
+//                 ], 404);
+//             }
 
-            // Check if user has enough profit
-            // if ($lp->profit < $amount) {
-            //     return response()->json([
-            //         'success' => false,
-            //         'message' => 'Insufficient profit balance.',
-            //     ], 400);
-            // }
+//             // Check if user has enough profit
+//             // if ($lp->profit < $amount) {
+//             //     return response()->json([
+//             //         'success' => false,
+//             //         'message' => 'Insufficient profit balance.',
+//             //     ], 400);
+//             // }
 
-            // Deduct profit
-            $lp->profit = 0;
-            $lp->save();
+//             // Deduct profit
+//             $lp->profit = 0;
+//             $lp->save();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User profit withdrawn successfully.',
-                'data' => [
-                    'wallet_address' => $recipient,
-                    'new_profit' => $lp->profit,
-                ],
-            ]);
-        }
+//             return response()->json([
+//                 'success' => true,
+//                 'message' => 'User profit withdrawn successfully.',
+//                 'data' => [
+//                     'wallet_address' => $recipient,
+//                     'new_profit' => $lp->profit,
+//                 ],
+//             ]);
+//         }
 
-        if ($type === 'admin') {
-            // 🧾 Deduct from admin total fee register
-            $adminFee = (float) get_register('total_fee');
-            // if ($adminFee < $amount) {
-            //     return response()->json([
-            //         'success' => false,
-            //         'message' => 'Insufficient total fee balance.',
-            //     ], 400);
-            // }
+//         if ($type === 'admin') {
+//             // 🧾 Deduct from admin total fee register
+//             $adminFee = (float) get_register('total_fee');
+//             // if ($adminFee < $amount) {
+//             //     return response()->json([
+//             //         'success' => false,
+//             //         'message' => 'Insufficient total fee balance.',
+//             //     ], 400);
+//             // }
 
-            //$adminFee -= $amount;
-            set_register('total_fee', 0);
+//             //$adminFee -= $amount;
+//             set_register('total_fee', 0);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Admin total fee updated successfully.',
-                'data' => [
-                    'total_fee' => $adminFee,
-                ],
-            ]);
-        }
+//             return response()->json([
+//                 'success' => true,
+//                 'message' => 'Admin total fee updated successfully.',
+//                 'data' => [
+//                     'total_fee' => $adminFee,
+//                 ],
+//             ]);
+//         }
 
-        return response()->json([
-            'success' => false,
-            'message' => 'Invalid type provided.',
-        ], 400);
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Invalid type provided.',
+//         ], 400);
 
-    } catch (\Throwable $th) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error processing withdrawal.',
-            'error' => $th->getMessage(),
-        ], 500);
-    }
-});
+//     } catch (\Throwable $th) {
+//         return response()->json([
+//             'success' => false,
+//             'message' => 'Error processing withdrawal.',
+//             'error' => $th->getMessage(),
+//         ], 500);
+//     }
+// });
