@@ -1,3 +1,6 @@
 {
-  "lastBlock": 23979688
+  "lastBlock": {
+    "result": 23982932,
+    "rpc": "https://ethereum-public.nodies.app"
+  }
 }

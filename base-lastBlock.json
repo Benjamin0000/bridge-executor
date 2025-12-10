@@ -1,3 +1,6 @@
 {
-  "lastBlock": 39274202
+  "lastBlock": {
+    "result": 39293937,
+    "rpc": "https://mainnet.base.org"
+  }
 }

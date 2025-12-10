@@ -1,44 +1,71 @@
-// indexer.js
+import dotenv from 'dotenv';
 import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
 import axios from "axios";
-
+import { BRIDGE_CONTRACT } from "./tokens.js";
+dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
 // ------------------------------
 // 1. Bridge ABI
 // ------------------------------
 const BRIDGE_ABI = [
   "event BridgeDeposit(string indexed nonce, address indexed from, address indexed tokenFrom, int64 amount, address to, address tokenTo, address poolAddress, uint64 desChain)"
 ];
+const TARGET_ENDPOINT = "https://hedera-api.kivon.io/api/bridge";
+const alchemy_key = process.env.ALCHEMY_API_KEY || ""
+
+if (!alchemy_key) {
+  console.error("Missing env vars: alchemy_key");
+  process.exit(1);
+}
 
 // ------------------------------
 // 2. Chains config
 // ------------------------------
 const CHAINS = {
   ethereum: {
-    rpc: ["https://ethereum-public.nodies.app"],
-    contract: "0xe179c49A5006EB738A242813A6C5BDe46a54Fc5C"
+    rpc: [
+      "https://ethereum-public.nodies.app", 
+      "https://ethereum-rpc.publicnode.com",
+      `https://eth-mainnet.g.alchemy.com/v2/${alchemy_key}`
+    ],
+    contract: BRIDGE_CONTRACT.ethereum
   },
   bsc: {
     rpc: [
+      // "https://bsc-dataseed1.defibit.io",
       "https://bsc.publicnode.com",
-      "https://bsc-dataseed1.defibit.io"
+      `https://bnb-mainnet.g.alchemy.com/v2/${alchemy_key}`
     ],
-    contract: "0x119d249246160028fcCCc8C3DF4a5a3C11dc9a6B"
+    contract: BRIDGE_CONTRACT.binance
   },
   base: {
-    rpc: ["https://mainnet.base.org"],
-    contract: "0xe179c49A5006EB738A242813A6C5BDe46a54Fc5C"
+    rpc: [
+      "https://mainnet.base.org",
+      "https://base-rpc.publicnode.com",
+      `https://base-mainnet.g.alchemy.com/v2/${alchemy_key}`
+    ],
+    contract: BRIDGE_CONTRACT.base
   },
   arbitrum: {
-    rpc: ["https://arb1.arbitrum.io/rpc"],
-    contract: "0x119d249246160028fcCCc8C3DF4a5a3C11dc9a6B"
+    rpc: [
+      "https://arb1.arbitrum.io/rpc",
+      "https://arbitrum-one-rpc.publicnode.com", 
+      `https://arb-mainnet.g.alchemy.com/v2/${alchemy_key}`
+    ],
+    contract: BRIDGE_CONTRACT.arbitrum
   },
   optimism: {
-    rpc: ["https://mainnet.optimism.io"],
-    contract: "0x119d249246160028fcCCc8C3DF4a5a3C11dc9a6B"
+    rpc: [
+      "https://mainnet.optimism.io",
+      "https://optimism-rpc.publicnode.com",
+      "https://optimism.drpc.org", 
+      `https://opt-mainnet.g.alchemy.com/v2/${alchemy_key}`
+    ],
+    contract: BRIDGE_CONTRACT.optimism
   }
 };
+
 
 // ------------------------------
 // 3. Provider wrapper with fallback
@@ -53,9 +80,10 @@ function getProvider(rpcs) {
     async call(fn) {
       for (const { url, provider } of providers) {
         try {
-          return await fn(provider);
+          const result = await fn(provider);
+          return { result, rpc: url };
         } catch (err) {
-          console.log("RPC failed:", url, "|", err.message);
+          console.log(`⚠️ RPC failed: ${url} | ${err.message}`);
         }
       }
       throw new Error("All RPCs failed!");
@@ -90,14 +118,21 @@ function saveLastBlock(chainName, blockNumber) {
 // ------------------------------
 // 5. Fetch logs with batching
 // ------------------------------
-async function fetchLogsBatched(provider, address, fromBlock, toBlock, batchSize = 10, topics = []) {
+async function fetchLogsBatched(chainName, provider, address, fromBlock, toBlock, batchSize = 10, topics = []) {
   let logs = [];
+
+  const startTime = Date.now();
+  console.log(
+    `\n🔍 [${chainName}] Checking for logs...`,
+    `\n   Contract: ${address}`,
+    `\n   Blocks:   ${fromBlock} → ${toBlock}`
+  );
 
   for (let start = fromBlock; start <= toBlock; start += batchSize) {
     const end = Math.min(start + batchSize - 1, toBlock);
 
     try {
-      const batchLogs = await provider.call(p =>
+      const { result: batchLogs, rpc } = await provider.call(p =>
         p.getLogs({
           address,
           fromBlock: start,
@@ -105,14 +140,24 @@ async function fetchLogsBatched(provider, address, fromBlock, toBlock, batchSize
           topics
         })
       );
+
       logs.push(...batchLogs);
+
+      console.log(
+        `   📦 Batch ${start} → ${end} | ${batchLogs.length} logs | RPC: ${rpc.split('//')[1]}`
+      );
+
     } catch (e) {
-      console.log(`❌ Batch failed ${start} → ${end}:`, e.message);
+      console.log(`   ❌ Batch ${start} → ${end} failed: ${e.message}`);
     }
   }
 
+  const ms = Date.now() - startTime;
+  console.log(`✅ [${chainName}] Logs fetched: ${logs.length} total (${ms} ms)\n`);
+
   return logs;
 }
+
 
 // ------------------------------
 // 6. Start chain listener
@@ -131,12 +176,22 @@ async function startChainListener(chainName, config) {
 
   const topicHash = ethers.id("BridgeDeposit(string,address,address,int64,address,address,address,uint64)");
 
+  let isRunning = false;
   setInterval(async () => {
+
+    
+
+    if (isRunning) return; // skip if previous run is still processing
+    isRunning = true;
+
+    console.log(`⏱️ Polling ${chainName} from block ${lastBlock + 1}...`);
+
     try {
       const latest = await provider.call(p => p.getBlockNumber());
       if (latest <= lastBlock) return;
 
       const logs = await fetchLogsBatched(
+        chainName,
         provider,
         config.contract,
         lastBlock + 1,
@@ -167,9 +222,16 @@ async function startChainListener(chainName, config) {
         };
 
         console.log(`🔵 [${chainName}] BridgeDeposit`, data);
-
-        // send to Laravel endpoint
-        // await axios.post("https://server/api/bridge", data);
+        // send to backend
+        try {
+          await axios.post(TARGET_ENDPOINT, data, {
+            headers: {
+              "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
+            }
+          });
+        } catch (err) {
+          console.error("❌ Error sending to backend:", err.message);
+        }
       }
 
       lastBlock = latest;
@@ -177,14 +239,17 @@ async function startChainListener(chainName, config) {
 
     } catch (err) {
       console.log(`❌ Error on ${chainName}:`, err.message);
+    } finally {
+      isRunning = false; // release the guard
     }
-  }, 6000);
+  }, 15000);
 }
 
 // ------------------------------
 // 7. Start all chains
 // ------------------------------
 for (const [chainName, config] of Object.entries(CHAINS)) {
+
   startChainListener(chainName, config);
 }
 

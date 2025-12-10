@@ -117,7 +117,17 @@ class BridgeController extends Controller
 
     public function bridge(Request $request)
     {
+
+        $secret = $request->header('X-Bridge-Secret');
+        if ($secret !== env('BRIDGE_INDEXER_KEY')) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
         $eventNonce = $request->input('nonceHash');
+        if(!$eventNonce) {
+            return response()->json(['success' => false, 'message' => 'Nonce hash is required'], 400);
+        }
+
         $deposit = Deposit::where('nonce_hash', $eventNonce)
                     ->where('status', 'none')
                     ->first();

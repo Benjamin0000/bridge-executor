@@ -1,3 +1,6 @@
 {
-  "lastBlock": 409029535
+  "lastBlock": {
+    "result": 409192271,
+    "rpc": "https://arb1.arbitrum.io/rpc"
+  }
 }

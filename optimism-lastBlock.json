@@ -1,3 +1,6 @@
 {
-  "lastBlock": 144869487
+  "lastBlock": {
+    "result": 144889222,
+    "rpc": "https://mainnet.optimism.io"
+  }
 }

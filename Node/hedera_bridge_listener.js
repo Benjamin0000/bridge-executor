@@ -1,8 +1,9 @@
-// hedera_bridge_indexer.js
 import axios from "axios";
 import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
+dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
+
 
 // ------------------------------
 // Config
@@ -84,12 +85,15 @@ async function pollBridgeDeposits() {
       console.log("🔥 BridgeDeposit found:", decoded);
 
       try {
-        await axios.post(TARGET_ENDPOINT, decoded);
+        await axios.post(TARGET_ENDPOINT, decoded, {
+          headers: {
+            "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
+          }
+        });
         console.log("✅ Sent to backend:", decoded.txHash);
       } catch (err) {
         console.error("❌ Error sending to backend:", err.message);
       }
-
       // Update cursor after successful processing
       lastTimestamp = log.timestamp;
       saveCursor(lastTimestamp);
