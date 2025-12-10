@@ -1,20 +1,29 @@
+// indexer.js
 import { ethers } from "ethers";
+import fs from "fs";
+import path from "path";
+import axios from "axios";
 
+// ------------------------------
+// 1. Bridge ABI
+// ------------------------------
 const BRIDGE_ABI = [
   "event BridgeDeposit(string indexed nonce, address indexed from, address indexed tokenFrom, int64 amount, address to, address tokenTo, address poolAddress, uint64 desChain)"
 ];
 
 // ------------------------------
-// 1. Chain config
+// 2. Chains config
 // ------------------------------
-
 const CHAINS = {
   ethereum: {
-    rpc: ["https://cloudflare-eth.com"],
+    rpc: ["https://ethereum-public.nodies.app"],
     contract: "0xe179c49A5006EB738A242813A6C5BDe46a54Fc5C"
   },
   bsc: {
-    rpc: ["https://bsc-dataseed.binance.org", "https://bsc.publicnode.com"],
+    rpc: [
+      "https://bsc.publicnode.com",
+      "https://bsc-dataseed1.defibit.io"
+    ],
     contract: "0x119d249246160028fcCCc8C3DF4a5a3C11dc9a6B"
   },
   base: {
@@ -32,9 +41,8 @@ const CHAINS = {
 };
 
 // ------------------------------
-// 2. Build provider fallback
+// 3. Provider wrapper with fallback
 // ------------------------------
-
 function getProvider(rpcs) {
   const providers = rpcs.map(rpc => ({
     url: rpc,
@@ -55,62 +63,129 @@ function getProvider(rpcs) {
   };
 }
 
+// ------------------------------
+// 4. Persistence for last processed block
+// ------------------------------
+function getLastBlockFile(chainName) {
+  return path.join(process.cwd(), `${chainName}-lastBlock.json`);
+}
+
+function loadLastBlock(chainName) {
+  const file = getLastBlockFile(chainName);
+  if (fs.existsSync(file)) {
+    try {
+      return JSON.parse(fs.readFileSync(file, "utf-8")).lastBlock;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function saveLastBlock(chainName, blockNumber) {
+  const file = getLastBlockFile(chainName);
+  fs.writeFileSync(file, JSON.stringify({ lastBlock: blockNumber }, null, 2));
+}
 
 // ------------------------------
-// 3. Listen to logs per chain
+// 5. Fetch logs with batching
 // ------------------------------
+async function fetchLogsBatched(provider, address, fromBlock, toBlock, batchSize = 10, topics = []) {
+  let logs = [];
 
+  for (let start = fromBlock; start <= toBlock; start += batchSize) {
+    const end = Math.min(start + batchSize - 1, toBlock);
+
+    try {
+      const batchLogs = await provider.call(p =>
+        p.getLogs({
+          address,
+          fromBlock: start,
+          toBlock: end,
+          topics
+        })
+      );
+      logs.push(...batchLogs);
+    } catch (e) {
+      console.log(`❌ Batch failed ${start} → ${end}:`, e.message);
+    }
+  }
+
+  return logs;
+}
+
+// ------------------------------
+// 6. Start chain listener
+// ------------------------------
 async function startChainListener(chainName, config) {
   const provider = getProvider(config.rpc);
   const iface = new ethers.Interface(BRIDGE_ABI);
 
-  // Start from current block (real-time only)
-  let lastBlock = await provider.call(p => p.getBlockNumber());
+  let lastBlock = loadLastBlock(chainName);
+  if (!lastBlock) {
+    lastBlock = await provider.call(p => p.getBlockNumber());
+    console.log(`→ Starting ${chainName} at current block ${lastBlock}`);
+  } else {
+    console.log(`→ Resuming ${chainName} from saved block ${lastBlock}`);
+  }
 
-  console.log(`→ Starting ${chainName} at block ${lastBlock}…`);
+  const topicHash = ethers.id("BridgeDeposit(string,address,address,int64,address,address,address,uint64)");
 
   setInterval(async () => {
     try {
       const latest = await provider.call(p => p.getBlockNumber());
-
       if (latest <= lastBlock) return;
 
-      const logs = await provider.call(p =>
-        p.getLogs({
-          address: config.contract,
-          fromBlock: lastBlock + 1,
-          toBlock: latest
-        })
+      const logs = await fetchLogsBatched(
+        provider,
+        config.contract,
+        lastBlock + 1,
+        latest,
+        10,
+        [topicHash]
       );
 
       for (const log of logs) {
-        const parsed = iface.parseLog(log);
+        let parsed;
+        try {
+          parsed = iface.parseLog(log);
+        } catch {
+          continue; // skip unrelated logs
+        }
 
         const data = {
-          ...parsed.args,
+          nonceHash: parsed.args.nonce.hash,
+          from: parsed.args.from,
+          tokenFrom: parsed.args.tokenFrom,
+          amount: Number(parsed.args.amount), // BigInt safe
+          to: parsed.args.to,
+          tokenTo: parsed.args.tokenTo,
+          poolAddress: parsed.args.poolAddress,
+          desChain: Number(parsed.args.desChain),
           txHash: log.transactionHash,
-          blockNumber: log.blockNumber,
+          blockNumber: log.blockNumber
         };
 
         console.log(`🔵 [${chainName}] BridgeDeposit`, data);
 
-        // TODO: send to Laravel endpoint
+        // send to Laravel endpoint
         // await axios.post("https://server/api/bridge", data);
       }
 
       lastBlock = latest;
+      saveLastBlock(chainName, lastBlock);
+
     } catch (err) {
       console.log(`❌ Error on ${chainName}:`, err.message);
     }
-  }, 6000); // poll every 6s
+  }, 6000);
 }
 
 // ------------------------------
-// 4. Start multitple listeners
+// 7. Start all chains
 // ------------------------------
-
 for (const [chainName, config] of Object.entries(CHAINS)) {
   startChainListener(chainName, config);
 }
 
-console.log("🔥 Multichain indexer running...");
+console.log("🔥 Multichain BridgeDeposit indexer running...");
