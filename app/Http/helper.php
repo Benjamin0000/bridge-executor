@@ -2,6 +2,7 @@
 
 use App\Models\Register;
 use App\Models\TokenPrice;
+use kornrunner\Keccak;
 
 
 function set_register($name, $value="")
@@ -61,4 +62,17 @@ function get_native_token_symbol($network)
 function generateNounce()
 {
     return bin2hex(random_bytes(16));
+}
+
+
+
+function keccak256($input)
+{
+    return '0x' . Keccak::hash($input, 256);
+}
+
+
+function compareNounces($nonce1, $nonce2)
+{
+    return hash_equals($nonce1, $nonce2);
 }
