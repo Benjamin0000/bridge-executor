@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "bi-php/web3-decode-php": "*",
         "kornrunner/keccak": "*",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
@@ -91,6 +92,6 @@
             "php-http/discovery": true
         }
     },
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "prefer-stable": true
 }

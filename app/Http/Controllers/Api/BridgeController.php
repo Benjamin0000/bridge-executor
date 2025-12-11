@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Providers\EvmEventDecoder; 
+
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -9,6 +11,7 @@ use App\Models\Deposit;
 use App\Jobs\ProcessDeposit; 
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
+
 
 
 
@@ -121,48 +124,32 @@ class BridgeController extends Controller
 
     public function bridge(Request $request)
     {
+        $payload = data_get($request->all(), 'payload.event.data.block.logs', []);
+        $deposit = null;
 
-        $payload = $request->all();
+        if (!empty($payload)) {
+            $event = new EvmEventDecoder();
+            $log = $event->handle($payload);
+            return $log; 
+            
+        }
 
-
-        Log::info('Alchemy Webhook Received', ['payload' => $payload]);
-
-    // 3. (Optional) Output the data directly for real-time testing
-    // You can use a temporary debug function like dd() or a JSON response.
-    // NOTE: NEVER USE dd() in a production environment as it stops execution.
-    // dd($payload); 
-    
-    // For testing, return the payload as a JSON response
-    return response()->json([
-        'status' => 'Data received for testing',
-        'payload' => $payload,
-    ], Response::HTTP_OK);
-
-
-
-
-
-        // $secret = $request->header('X-Bridge-Secret');
-        // if ($secret !== env('BRIDGE_INDEXER_KEY')) {
-        //     return response()->json(['error' => 'Unauthorized'], 401);
-        // }
-
-        // $eventNonce = $request->input('nonceHash');
-        // if(!$eventNonce) {
-        //     return response()->json(['success' => false, 'message' => 'Nonce hash is required'], 400);
-        // }
-
-        // $deposit = Deposit::where('nonce_hash', $eventNonce)
-        //             ->where('status', 'none')
-        //             ->first();
-        // if($deposit){
-        //     $deposit->status = 'pending';
-        //     $deposit->tx_hash = $request->input('txHash');
-        //     $deposit->save();
-        //     ProcessDeposit::dispatch($deposit);
-        // }
-        // return response()->json(['success' => true]);
+        return "empty payload";
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     public function get_bridge_status(Request $request)
     {
