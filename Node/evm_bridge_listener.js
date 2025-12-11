@@ -118,7 +118,7 @@ function saveLastBlock(chainName, blockNumber) {
 // ------------------------------
 // 5. Fetch logs with batching
 // ------------------------------
-async function fetchLogsBatched(chainName, provider, address, fromBlock, toBlock, batchSize = 10, topics = []) {
+async function fetchLogsBatched(chainName, provider, address, fromBlock, toBlock, batchSize = 100, topics = []) {
   let logs = [];
 
   const startTime = Date.now();
@@ -196,7 +196,7 @@ async function startChainListener(chainName, config) {
         config.contract,
         lastBlock + 1,
         latest,
-        10,
+        100,
         [topicHash]
       );
 
@@ -209,10 +209,10 @@ async function startChainListener(chainName, config) {
         }
 
         const data = {
-          nonceHash: parsed.args.nonce.hash,
+          nonceHash: parsed.args.nonce,
           from: parsed.args.from,
           tokenFrom: parsed.args.tokenFrom,
-          amount: Number(parsed.args.amount), // BigInt safe
+          amount: parsed.args.amount.toString(), // BigInt safe
           to: parsed.args.to,
           tokenTo: parsed.args.tokenTo,
           poolAddress: parsed.args.poolAddress,
@@ -223,15 +223,15 @@ async function startChainListener(chainName, config) {
 
         console.log(`🔵 [${chainName}] BridgeDeposit`, data);
         // send to backend
-        try {
-          await axios.post(TARGET_ENDPOINT, data, {
-            headers: {
-              "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
-            }
-          });
-        } catch (err) {
-          console.error("❌ Error sending to backend:", err.message);
-        }
+      //   try {
+      //     await axios.post(TARGET_ENDPOINT, data, {
+      //       headers: {
+      //         "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
+      //       }
+      //     });
+      //   } catch (err) {
+      //     console.error("❌ Error sending to backend:", err.message);
+      //   }
       }
 
       lastBlock = latest;
@@ -242,7 +242,7 @@ async function startChainListener(chainName, config) {
     } finally {
       isRunning = false; // release the guard
     }
-  }, 15000);
+  }, 15000); 
 }
 
 // ------------------------------
