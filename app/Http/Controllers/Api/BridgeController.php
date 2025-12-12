@@ -6,11 +6,11 @@ use App\Services\EvmEventDecoder;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
 use App\Models\Deposit;
 use App\Jobs\ProcessDeposit; 
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Arr; 
 
 
@@ -133,8 +133,7 @@ class BridgeController extends Controller
 
         if (!empty($evmBlock)) {
 
-            // Optional: Verify request signature to ensure it's from Alchemy
-            if (!$this->verifyAlchemyRequest($request)) {
+            if (!verifyAlchemyRequest()) {
                 return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
             }
 
@@ -223,19 +222,6 @@ class BridgeController extends Controller
         return response()->json([
             'status' => 'Hedera event processed successfully',
         ], Response::HTTP_OK);
-    }
-
-    /**
-     * Verify that the incoming request is from Alchemy.
-     * You can implement signature verification, secret token, or any custom check here.
-     */
-    private function verifyAlchemyRequest(Request $request): bool
-    {
-        $signature = $request->header('X-Alchemy-Signature');
-        $signingKey = env('ALCHEMY_WEBHOOK_SECRET');
-        $rawBody = file_get_contents('php://input');
-        $computedHash = hash_hmac('sha256', $rawBody, $signingKey);
-        return hash_equals($computedHash, $signature);
     }
 
     public function get_bridge_status(Request $request)

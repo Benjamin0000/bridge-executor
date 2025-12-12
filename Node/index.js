@@ -13,6 +13,7 @@ dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
 
 import {
   RPC_URL,
+  BALANCE_RPC_URL, 
   TOKENS,
   WRAPPED_NATIVE,
   ROUTER,
@@ -60,7 +61,7 @@ async function getEvmAmountsOut(amountInBigInt, path, routerAddress, provider) {
 
 async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmount) {
 
-  console.log(RPC_URL[fromNetwork])
+  // console.log(RPC_URL[fromNetwork])
     let bridge_contract = BRIDGE_CONTRACT[fromNetwork];
     const fromProvider = new ethers.JsonRpcProvider(RPC_URL[fromNetwork]);
     const TokenFrom = TOKENS?.[fromNetwork]?.[fromToken];
@@ -92,14 +93,14 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
     // 4. Check if user needs to approve bridge contract
     const allowance = await fromTokenContract.allowance(fromAddress, bridge_contract); 
 
-    console.log('bridge from contract', bridge_contract)
-    console.log('bridge from network', fromNetwork)
-    console.log('allowance', allowance)
-    console.log('amount in wei', amountInWei)
-    console.log('sender in wei', fromAddress)
-    console.log('token from contract',  token_address)
+    // console.log('bridge from contract', bridge_contract)
+    // console.log('bridge from network', fromNetwork)
+    // console.log('allowance', allowance)
+    // console.log('amount in wei', amountInWei)
+    // console.log('sender in wei', fromAddress)
+    // console.log('token from contract',  token_address)
 
-    console.log()
+    // console.log()
     // 5. Compare the two BigInt values directly
     if (allowance < amountInWei) {
       requireAllowance = true; 
@@ -109,9 +110,9 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
 
 app.post("/bridge/precheck", async (req, res) => {
 
-  console.log("All body", req.body)
+  // console.log("All body", req.body)
 
-  console.log("All body", req.body)
+  // console.log("All body", req.body)
   try {
     const { network, token, amount, nativeAmount, fromNetwork, fromAddress, fromToken, fromAmount } = req.body;
 
@@ -569,7 +570,7 @@ app.get("/balance", async (req, res) => {
     // ============================
     //     EVM (ETH / BNB / etc)
     // ============================
-    const rpc = RPC_URL[network];
+    const rpc = BALANCE_RPC_URL[network];
     const provider = new ethers.JsonRpcProvider(rpc);
 
     if (!token) {

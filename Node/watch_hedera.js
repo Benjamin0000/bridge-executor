@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const MONITORED_ACCOUNT = '0.0.10115610';
+const MONITORED_ACCOUNT = '0.0.10145769';
 const BACKEND_URL = 'https://hedera-api.kivon.io/api/add-liquidity';
 let lastTimestamp = null;
 
@@ -26,11 +26,17 @@ async function pollHederaDeposits() {
 
       console.log(`📥 Deposit detected: ${amountHbar} HBAR from ${sender}`);
 
-      await axios.post(BACKEND_URL, {
+      const body = {
         wallet_address: sender,
         network: 'hedera',
         amount: amountHbar,
         txId: tx.transaction_id
+      }; 
+
+      await axios.post(BACKEND_URL, body, {
+          headers: {
+            "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
+          }
       });
     }
 
