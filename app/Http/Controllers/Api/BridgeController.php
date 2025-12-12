@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Services\EvmEventDecoder; 
+
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
 use App\Models\Deposit;
 use App\Jobs\ProcessDeposit; 
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Arr; 
 
 
 
@@ -119,49 +122,106 @@ class BridgeController extends Controller
     }
 
 
-    public function bridge(Request $request)
-    {
-
+   public function bridge(Request $request)
+   {
         $payload = $request->all();
 
+        // ----------------------------
+        // 1. Handle EVM events (Alchemy)
+        // ----------------------------
+        $evmBlock = Arr::get($payload, 'payload.event.data.block');
 
-        Log::info('Alchemy Webhook Received', ['payload' => $payload]);
+        if (!empty($evmBlock)) {
 
-    // 3. (Optional) Output the data directly for real-time testing
-    // You can use a temporary debug function like dd() or a JSON response.
-    // NOTE: NEVER USE dd() in a production environment as it stops execution.
-    // dd($payload); 
-    
-    // For testing, return the payload as a JSON response
-    return response()->json([
-        'status' => 'Data received for testing',
-        'payload' => $payload,
-    ], Response::HTTP_OK);
+            if (!verifyAlchemyRequest()) {
+                return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            }
 
+            $logs = Arr::get($evmBlock, 'logs', []);
+            $decoder = new EvmEventDecoder();
 
+            foreach ($logs as $log) {
+                $decoded = $decoder->decodeLog($log);
 
+                if (!$decoded) continue;
 
+                // --- BridgeDeposit ---
+                if (($decoded['event'] ?? null) === 'BridgeDeposit') {
+                    $eventNonce = $decoded['decoded']['nonce'] ?? null;
 
-        // $secret = $request->header('X-Bridge-Secret');
-        // if ($secret !== env('BRIDGE_INDEXER_KEY')) {
-        //     return response()->json(['error' => 'Unauthorized'], 401);
-        // }
+                    if ($eventNonce) {
+                        $deposit = Deposit::where('nonce_hash', $eventNonce)
+                                          ->where('status', 'none')
+                                          ->first();
 
-        // $eventNonce = $request->input('nonceHash');
-        // if(!$eventNonce) {
-        //     return response()->json(['success' => false, 'message' => 'Nonce hash is required'], 400);
-        // }
+                        if (!$deposit) {
+                            Log::warning("Deposit not found for nonce: {$eventNonce}");
+                            continue;
+                        }
 
-        // $deposit = Deposit::where('nonce_hash', $eventNonce)
-        //             ->where('status', 'none')
-        //             ->first();
-        // if($deposit){
-        //     $deposit->status = 'pending';
-        //     $deposit->tx_hash = $request->input('txHash');
-        //     $deposit->save();
-        //     ProcessDeposit::dispatch($deposit);
-        // }
-        // return response()->json(['success' => true]);
+                        $deposit->status = 'pending';
+                        $deposit->save();
+
+                        ProcessDeposit::dispatch($deposit);
+                        Log::info("BridgeDeposit processed for nonce: {$eventNonce}");
+                    }
+
+                // --- PoolAddressUpdated ---
+                } elseif (($decoded['event'] ?? null) === 'PoolAddressUpdated') {
+                    $oldAddress = $decoded['decoded']['oldPool'] ?? null;
+                    $newAddress = $decoded['decoded']['newPool'] ?? null;
+
+                    if ($newAddress) {
+                        // Update pool address in your system
+                        pool_address_evm($newAddress);
+                        Log::info("Pool address updated from {$oldAddress} to {$newAddress}");
+                    }
+                }
+            }
+
+            return response()->json([
+                'status' => 'EVM logs processed successfully',
+                'decoded_logs_count' => count($logs)
+            ], Response::HTTP_OK);
+        }
+
+        // ----------------------------
+        // 2. Handle Hedera events
+        // ----------------------------
+        $hederaSecret = $request->header('X-Bridge-Secret');
+
+        if ($hederaSecret !== env('BRIDGE_INDEXER_KEY')) {
+            return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $eventNonce = $request->input('nonceHash');
+        if (!$eventNonce) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nonce hash is required'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $deposit = Deposit::where('nonce_hash', $eventNonce)
+                          ->where('status', 'none')
+                          ->first();
+
+        if (!$deposit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Deposit not found for nonce: ' . $eventNonce
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        $deposit->status = 'pending';
+        $deposit->save();
+
+        ProcessDeposit::dispatch($deposit);
+        Log::info("Hedera deposit processed for nonce: {$eventNonce}");
+
+        return response()->json([
+            'status' => 'Hedera event processed successfully',
+        ], Response::HTTP_OK);
     }
 
     public function get_bridge_status(Request $request)
@@ -178,7 +238,6 @@ class BridgeController extends Controller
         ]; 
         return response()->json(['success' => true]);
     }
-
 
     public function mint($nonce)
     {

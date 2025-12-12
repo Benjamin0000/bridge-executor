@@ -82,7 +82,7 @@ async function pollBridgeDeposits() {
       const decoded = tryDecode(log);
       if (!decoded) continue;
 
-      console.log("🔥 BridgeDeposit found:", decoded);
+      // console.log("🔥 BridgeDeposit found:", decoded);
 
       try {
         await axios.post(TARGET_ENDPOINT, decoded, {

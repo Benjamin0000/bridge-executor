@@ -26,11 +26,17 @@ async function pollHederaDeposits() {
 
       console.log(`📥 Deposit detected: ${amountHbar} HBAR from ${sender}`);
 
-      await axios.post(BACKEND_URL, {
+      const body = {
         wallet_address: sender,
         network: 'hedera',
         amount: amountHbar,
         txId: tx.transaction_id
+      }; 
+
+      await axios.post(BACKEND_URL, body, {
+          headers: {
+            "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
+          }
       });
     }
 

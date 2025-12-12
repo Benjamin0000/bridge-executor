@@ -1,5 +1,12 @@
 import { AccountId, AccountInfoQuery, Hbar} from "@hashgraph/sdk"
 
+const alchemy_key = process.env.ALCHEMY_API_KEY || ""
+
+if (!alchemy_key) {
+  console.error("Missing env vars: alchemy_key");
+  process.exit(1);
+}
+
 /**
  * Truncates a string representation of a decimal number to a specific number of places.
  * This is safer than Math.round() for token inputs.
@@ -40,12 +47,22 @@ export const routerAbi = [
 ];
 
 export const RPC_URL = {
+    hedera:'https://mainnet.hashio.io/api',
+    ethereum:`https://eth-mainnet.g.alchemy.com/v2/${alchemy_key}`, 
+    binance: `https://bnb-mainnet.g.alchemy.com/v2/${alchemy_key}`,
+    base: `https://base-mainnet.g.alchemy.com/v2/${alchemy_key}`, 
+    arbitrum: `https://arb-mainnet.g.alchemy.com/v2/${alchemy_key}`,
+    optimism: `https://opt-mainnet.g.alchemy.com/v2/${alchemy_key}`, 
+};
+
+
+export const BALANCE_RPC_URL = {
     hedera: 'https://mainnet.hashio.io/api',
-    ethereum: 'https://go.getblock.io/fd4ab7b7e62240edb493a71c07d9e9d9', 
-    binance: 'https://go.getblock.io/0263afbf47c248a2a0e0bef0af81abd4',
-    base: 'https://base-mainnet.infura.io/v3/12ad8117c11740f6af54d522b1389960', 
-    arbitrum: 'https://arb-mainnet.g.alchemy.com/v2/AgwLNm_azHjH7vD3t65j4',
-    optimism: 'https://opt-mainnet.g.alchemy.com/v2/AgwLNm_azHjH7vD3t65j4', 
+    ethereum: 'https://ethereum-rpc.publicnode.com', 
+    binance: 'https://bsc.publicnode.com',
+    base: 'https://base-rpc.publicnode.com', 
+    arbitrum: 'https://arbitrum-one-rpc.publicnode.com',
+    optimism: 'https://optimism-rpc.publicnode.com', 
 }; 
 
 export const WRAPPED_NATIVE = {
@@ -57,7 +74,7 @@ export const WRAPPED_NATIVE = {
     optimism: '0x4200000000000000000000000000000000000006',
 }; 
 
-export const ROUTER = {
+export const ROUTER = { 
     hedera: '0x00000000000000000000000000000000002e7a5d',
     ethereum: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
     binance: '0x10ED43C718714eb63d5aA57B78B54704E256024E', 

@@ -1,0 +1,141 @@
+           // if ( isset($log['event']) && $log['event'] == 'BridgeDeposit') {
+                // $eventNonce = $log['nonce'];
+                // $deposit = Deposit::where('nonce', $eventNonce)->first();
+                // if (!$deposit) {
+                //     return response()->json(['success' => false, 'message' => 'Deposit not found for nonce: ' . $eventNonce], 404);
+                // }
+                // // Dispatch job to process deposit
+                // ProcessDeposit::dispatch($deposit, $log);
+
+        //     } else if( isset($log['event']) && $log['event'] == 'PoolAddressUpdated'){
+
+        //     }
+        // }else{
+        //     //hedera event
+        //     $secret = $request->header('X-Bridge-Secret');
+        //     if ($secret !== env('BRIDGE_INDEXER_KEY')) {
+        //         return response()->json(['error' => 'Unauthorized'], 401);
+        //     }
+
+        //     $eventNonce = $request->input('nonceHash');
+        //     if(!$eventNonce) {
+        //         return response()->json(['success' => false, 'message' => 'Nonce hash is required'], 400);
+        //     }
+
+        //     $deposit = Deposit::where('nonce_hash', $eventNonce)->first();
+        // }
+
+
+      
+
+
+
+
+        // return response()->json([
+        //     'status' => 'Data received for testing',
+        //     'payload' => $payload,
+        // ], Response::HTTP_OK);
+
+
+
+        
+    public function bridge(Request $request)
+    {
+        $payload = $request->input('payload.event.data.block.logs', []);
+        $deposit = null;
+
+        if (!empty($payload)) {
+            $event = new EvmEventDecoder();
+            $log = $event->handle($payload);
+            Log::info('Alchemy Webhook Received', $log);
+
+        }
+        
+        return response()->json(['status' => 'success'], 200);
+
+    }
+
+
+
+
+    curl -X POST http://127.0.0.1:8000/api/bridge \
+  -H "Content-Type: application/json" \
+  -d '{
+    "payload": {
+      "webhookId": "wh_ix2cavcomghq6o9y",
+      "id": "whevt_3amxw1t23o6at7m7",
+      "createdAt": "2025-12-11T11:18:07.918Z",
+      "type": "GRAPHQL",
+      "event": {
+        "data": {
+          "block": {
+            "hash": "0x5a15dd194e089651015530df0d4cb7a1d5cad06a056d5cd6133094e60f87fe1a",
+            "number": 409491601,
+            "timestamp": 1765451887,
+            "logs": [
+              {
+                "data": "0x000000000000000000000000000000000000000000000000000012309ce54000000000000000000000000000f10ee4cf289d2f6b53a90229ce16b8646e7244180000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f10ee4cf289d2f6b53a90229ce16b8646e7244180000000000000000000000000000000000000000000000000000000000000001",
+                "topics": [
+                  "0xbbe04d88f19f37edec128135fc7a2fc4615cc1167ab6eb48edef93422342c6d0",
+                  "0x2414c2cc2abad26fa1a38e5d4f85581204489e647100f93776b5bad8ee82ab35",
+                  "0x000000000000000000000000f10ee4cf289d2f6b53a90229ce16b8646e724418",
+                  "0x0000000000000000000000000000000000000000000000000000000000000000"
+                ],
+                "index": 1,
+                "account": {
+                  "address": "0x119d249246160028fcccc8c3df4a5a3c11dc9a6b"
+                },
+                "transaction": {
+                  "hash": "0xaa6fd089ee435de34b9554d95d2b079dc9068c628ac4e289515e5cae37f2ad9e",
+                  "nonce": 8,
+                  "index": 2,
+                  "from": {
+                    "address": "Over 9 levels deep, aborting normalization"
+                  },
+                  "to": {
+                    "address": "Over 9 levels deep, aborting normalization"
+                  },
+                  "value": "0x12309ce54000",
+                  "gasPrice": "0x989680",
+                  "maxFeePerGas": "0xcdfe60",
+                  "maxPriorityFeePerGas": "0x0",
+                  "gas": 202972,
+                  "status": 1,
+                  "gasUsed": 196745,
+                  "cumulativeGasUsed": 241816,
+                  "effectiveGasPrice": "0x989680",
+                  "createdContract": null
+                }
+              }
+            ]
+          }
+        }
+      },
+      "sequenceNumber": "10000003106394432002",
+      "network": "ARB_MAINNET"
+    }
+  }'
+
+
+
+        // $secret = $request->header('X-Bridge-Secret');
+        // if ($secret !== env('BRIDGE_INDEXER_KEY')) {
+        //     return response()->json(['error' => 'Unauthorized'], 401);
+        // }
+
+        // $eventNonce = $request->input('nonceHash');
+        // if(!$eventNonce) {
+        //     return response()->json(['success' => false, 'message' => 'Nonce hash is required'], 400);
+        // }
+
+        // $deposit = Deposit::where('nonce_hash', $eventNonce)
+        //             ->where('status', 'none')
+        //             ->first();
+        // if($deposit){
+        //     $deposit->status = 'pending';
+        //     $deposit->tx_hash = $request->input('txHash');
+        //     $deposit->save();
+        //     ProcessDeposit::dispatch($deposit);
+        // }
+        // return response()->json(['success' => true]);
+

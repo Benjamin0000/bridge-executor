@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\Request; 
+use Illuminate\Http\Response;
 use App\Models\Valt;
 use App\Models\Lp;
 use App\Models\DepHash;
@@ -14,7 +15,6 @@ class ValtController extends Controller
 
     public function valts()
     {
-        // Artisan::call('app:update-liquidity-balance');
 
         $valts = Valt::all();
         $networkMeta = config('networks');
@@ -62,7 +62,6 @@ class ValtController extends Controller
      */
     public function get_valt($network)
     {
-        // Artisan::call('app:update-liquidity-balance');
 
         $valt = Valt::where('network', $network)->first();
 
@@ -104,6 +103,12 @@ class ValtController extends Controller
 
     public function add_liquidity(Request $request)
     {
+
+        $hederaSecret = $request->header('X-Bridge-Secret');
+
+        if ($hederaSecret !== env('BRIDGE_INDEXER_KEY')) {
+            return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+        }
         
         $request->validate([
             'wallet_address' => 'required|string',
@@ -190,6 +195,10 @@ class ValtController extends Controller
 
 public function add_liquidity_from_alchemy(Request $request)
 {
+    if (!verifyAlchemyRequest()) {
+        return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+    }
+
     // Map Alchemy network names to internal network names
     $alchemyNetworkMap = [
         'ETH_MAINNET'      => 'ethereum',
