@@ -126,6 +126,9 @@ class BridgeController extends Controller
    {
         $payload = $request->all();
 
+        Log::info('Incoming Request Payload:', $payload);
+
+
         // ----------------------------
         // 1. Handle EVM events (Alchemy)
         // ----------------------------
