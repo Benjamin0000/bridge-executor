@@ -140,6 +140,8 @@ class BridgeController extends Controller
                 return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
             }
 
+            Log::info('Alchemy access verified. ');
+
             $logs = Arr::get($evmBlock, 'logs', []);
             $decoder = new EvmEventDecoder();
 
