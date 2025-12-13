@@ -89,7 +89,11 @@ async function pollBridgeDeposits() {
         // if (Number(log.timestamp) <= Number(cursor.timestamp)) continue;
 
         const decoded = tryDecode(log);
-        if (!decoded) continue;
+      
+        if (!decoded){
+          console.log("⚠️  Unable to decode log:", log.transaction_hash);
+          continue;
+        } 
 
         try {
           await axios.post(TARGET_ENDPOINT, decoded, {
