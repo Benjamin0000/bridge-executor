@@ -4,7 +4,7 @@ use App\Models\Register;
 use App\Models\TokenPrice;
 use kornrunner\Keccak;
 use App\Providers\EvmEventDecoder; 
-
+use Illuminate\Support\Facades\Log;
 
 function set_register($name, $value="")
 {
