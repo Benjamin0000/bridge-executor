@@ -117,6 +117,17 @@ function verifyAlchemyRequest(): bool
     $signature = request()->header('X-Alchemy-Signature');
     $signingKey = env('ALCHEMY_WEBHOOK_SECRET');
     $rawBody = file_get_contents('php://input');
+
     $computedHash = hash_hmac('sha256', $rawBody, $signingKey);
+
+    // --- TEMPORARY DEBUGGING LINES ---
+    Log::info('Received Sig: ' . $signature);
+    Log::info('Computed Hash: ' . $computedHash);
+    Log::info('Raw Body Length: ' . strlen($rawBody));
+    // --- END DEBUGGING ---
+
+    // Ensure you account for any potential prefix like '0x' in the signature
+    // Example: $signature = str_ireplace('0x', '', $signature);
+
     return hash_equals($computedHash, $signature);
 }
