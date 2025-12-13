@@ -85,8 +85,8 @@ async function pollBridgeDeposits() {
       const logs = res.data.logs || [];
 
       for (const log of logs) {
-        // 🔒 Skip already-processed logs
-        if (log.timestamp <= cursor.timestamp) continue;
+        
+        // if (Number(log.timestamp) <= Number(cursor.timestamp)) continue;
 
         const decoded = tryDecode(log);
         if (!decoded) continue;
