@@ -156,7 +156,7 @@ class BridgeController extends Controller
                     $eventNonce = $decoded['decoded']['nonce'] ?? null;
 
                     if ($eventNonce) {
-                        $deposit = Deposit::where('nonce_hash', $eventNonce)
+                        $deposit = Deposit::where('nonce_hash', '0x'.$eventNonce)
                                           ->where('status', 'none')
                                           ->first();
 
