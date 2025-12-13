@@ -135,13 +135,13 @@ class BridgeController extends Controller
         $evmBlock = Arr::get($payload, 'event.data.block');
 
         if (!empty($evmBlock)) {
-             Log::info('Alchemy access payload. ', $payload);
-            if (!verifyAlchemyRequest()) {
-                Log::info('Alchemy access faild. ');
-                return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
-            }
+            //  Log::info('Alchemy access payload. ', $payload);
+            // if (!verifyAlchemyRequest()) {
+            //     Log::info('Alchemy access faild. ');
+            //     return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            // }
 
-            Log::info('Alchemy access verified. ');
+            // Log::info('Alchemy access verified. ');
 
             $logs = Arr::get($evmBlock, 'logs', []);
             $decoder = new EvmEventDecoder();
