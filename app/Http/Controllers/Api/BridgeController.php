@@ -126,7 +126,7 @@ class BridgeController extends Controller
    {
         $payload = $request->all();
 
-        Log::info('Incoming Request Payload:', $payload);
+        // Log::info('Incoming Request Payload:', $payload);
 
 
         // ----------------------------
