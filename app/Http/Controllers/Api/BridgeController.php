@@ -132,13 +132,15 @@ class BridgeController extends Controller
         // ----------------------------
         // 1. Handle EVM events (Alchemy)
         // ----------------------------
-        $evmBlock = Arr::get($payload, 'payload.event.data.block');
+        $evmBlock = Arr::get($payload, 'event.data.block');
 
         if (!empty($evmBlock)) {
 
             if (!verifyAlchemyRequest()) {
                 return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
             }
+
+            Log::info('Alchemy access verified. ');
 
             $logs = Arr::get($evmBlock, 'logs', []);
             $decoder = new EvmEventDecoder();
