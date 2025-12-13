@@ -1,4 +1,6 @@
+import dotenv from 'dotenv';
 import { AccountId, AccountInfoQuery, Hbar} from "@hashgraph/sdk"
+dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
 
 const alchemy_key = process.env.ALCHEMY_API_KEY || ""
 
