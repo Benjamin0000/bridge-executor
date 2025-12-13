@@ -2,8 +2,9 @@ import axios from "axios";
 import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
-dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
+import dotenv from "dotenv";
 
+dotenv.config({ path: process.env.DOTENV_CONFIG_PATH });
 
 // ------------------------------
 // Config
@@ -11,30 +12,34 @@ dotenv.config({path: process.env.DOTENV_CONFIG_PATH});
 const MIRROR = "https://mainnet-public.mirrornode.hedera.com";
 const CONTRACT_ID = "0.0.10115692";
 const TARGET_ENDPOINT = "https://hedera-api.kivon.io/api/bridge";
-const POLL_INTERVAL = 2000; // 2 seconds
+const POLL_INTERVAL = 2000;
 const CURSOR_FILE = path.join(process.cwd(), "lastHederaBridgeTimestamp.json");
+
+// use higher limit safely
+const PAGE_LIMIT = 100;
 
 const iface = new ethers.Interface([
   "event BridgeDeposit(string indexed nonce,address indexed from,address indexed tokenFrom,int64 amount,address to,address tokenTo,address poolAddress,uint64 desChain)"
 ]);
 
 // ------------------------------
-// Load or initialize lastTimestamp
+// Cursor helpers
 // ------------------------------
 function loadCursor() {
-  if (fs.existsSync(CURSOR_FILE)) {
-    try {
+  try {
+    if (fs.existsSync(CURSOR_FILE)) {
       const data = JSON.parse(fs.readFileSync(CURSOR_FILE, "utf-8"));
       return data.lastTimestamp || "0";
-    } catch {
-      return "0";
     }
-  }
+  } catch {}
   return "0";
 }
 
 function saveCursor(ts) {
-  fs.writeFileSync(CURSOR_FILE, JSON.stringify({ lastTimestamp: ts }, null, 2));
+  fs.writeFileSync(
+    CURSOR_FILE,
+    JSON.stringify({ lastTimestamp: ts }, null, 2)
+  );
 }
 
 let lastTimestamp = loadCursor();
@@ -55,7 +60,7 @@ function tryDecode(log) {
       nonceHash: parsed.args.nonce.hash,
       from: parsed.args.from,
       tokenFrom: parsed.args.tokenFrom,
-      amount: Number(parsed.args.amount), // safe conversion
+      amount: Number(parsed.args.amount),
       to: parsed.args.to,
       tokenTo: parsed.args.tokenTo,
       poolAddress: parsed.args.poolAddress,
@@ -69,33 +74,49 @@ function tryDecode(log) {
 }
 
 // ------------------------------
-// Polling function
+// Polling with pagination
 // ------------------------------
 async function pollBridgeDeposits() {
   try {
-    const url = `${MIRROR}/api/v1/contracts/${CONTRACT_ID}/results/logs?order=asc&limit=10&timestamp=gt:${lastTimestamp}`;
-    const res = await axios.get(url);
+    let nextUrl =
+      `${MIRROR}/api/v1/contracts/${CONTRACT_ID}/results/logs` +
+      `?order=asc` +
+      `&limit=${PAGE_LIMIT}` +
+      `&timestamp=gt:${lastTimestamp}`;
 
-    if (!res.data.logs || res.data.logs.length === 0) return;
+    let maxSeenTimestamp = lastTimestamp;
 
-    for (const log of res.data.logs) {
-      const decoded = tryDecode(log);
-      if (!decoded) continue;
+    while (nextUrl) {
+      const res = await axios.get(nextUrl);
+      const logs = res.data.logs || [];
 
-      // console.log("🔥 BridgeDeposit found:", decoded);
+      for (const log of logs) {
+        const decoded = tryDecode(log);
+        if (!decoded) continue;
 
-      try {
-        await axios.post(TARGET_ENDPOINT, decoded, {
-          headers: {
-            "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY
-          }
-        });
-        console.log("✅ Sent to backend:", decoded.txHash);
-      } catch (err) {
-        console.error("❌ Error sending to backend:", err.message);
+        try {
+          await axios.post(TARGET_ENDPOINT, decoded, {
+            headers: {
+              "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY,
+            },
+          });
+
+          console.log("✅ BridgeDeposit sent:", decoded.txHash);
+          maxSeenTimestamp = log.timestamp;
+        } catch (err) {
+          console.error("❌ Backend error:", err.message);
+          return; // stop & retry next poll (no cursor advance)
+        }
       }
-      // Update cursor after successful processing
-      lastTimestamp = log.timestamp;
+
+      nextUrl = res.data.links?.next
+        ? `${MIRROR}${res.data.links.next}`
+        : null;
+    }
+
+    // ✅ Commit cursor once, safely
+    if (maxSeenTimestamp !== lastTimestamp) {
+      lastTimestamp = maxSeenTimestamp;
       saveCursor(lastTimestamp);
     }
   } catch (err) {
