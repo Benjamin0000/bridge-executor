@@ -137,6 +137,7 @@ class BridgeController extends Controller
         if (!empty($evmBlock)) {
 
             if (!verifyAlchemyRequest()) {
+                 Log::info('Alchemy access faild. ');
                 return response()->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
             }
 

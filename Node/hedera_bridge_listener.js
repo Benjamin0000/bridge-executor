@@ -13,9 +13,7 @@ const MIRROR = "https://mainnet-public.mirrornode.hedera.com";
 const CONTRACT_ID = "0.0.10115692";
 const TARGET_ENDPOINT = "https://hedera-api.kivon.io/api/bridge";
 const POLL_INTERVAL = 2000;
-const CURSOR_FILE = path.join(process.cwd(), "lastHederaBridgeTimestamp.json");
-
-// use higher limit safely
+const CURSOR_FILE = path.join(process.cwd(), "lastHederaBridgeCursor.json");
 const PAGE_LIMIT = 100;
 
 const iface = new ethers.Interface([
@@ -23,26 +21,22 @@ const iface = new ethers.Interface([
 ]);
 
 // ------------------------------
-// Cursor helpers
+// Cursor helpers (timestamp + log_index)
 // ------------------------------
 function loadCursor() {
   try {
     if (fs.existsSync(CURSOR_FILE)) {
-      const data = JSON.parse(fs.readFileSync(CURSOR_FILE, "utf-8"));
-      return data.lastTimestamp || "0";
+      return JSON.parse(fs.readFileSync(CURSOR_FILE, "utf-8"));
     }
   } catch {}
-  return "0";
+  return { timestamp: "0", log_index: -1 };
 }
 
-function saveCursor(ts) {
-  fs.writeFileSync(
-    CURSOR_FILE,
-    JSON.stringify({ lastTimestamp: ts }, null, 2)
-  );
+function saveCursor(cursor) {
+  fs.writeFileSync(CURSOR_FILE, JSON.stringify(cursor, null, 2));
 }
 
-let lastTimestamp = loadCursor();
+let cursor = loadCursor();
 
 // ------------------------------
 // Decode BridgeDeposit logs
@@ -74,7 +68,7 @@ function tryDecode(log) {
 }
 
 // ------------------------------
-// Polling with pagination
+// Polling with safe cursoring
 // ------------------------------
 async function pollBridgeDeposits() {
   try {
@@ -82,15 +76,23 @@ async function pollBridgeDeposits() {
       `${MIRROR}/api/v1/contracts/${CONTRACT_ID}/results/logs` +
       `?order=asc` +
       `&limit=${PAGE_LIMIT}` +
-      `&timestamp=gt:${lastTimestamp}`;
+      `&timestamp=gte:${cursor.timestamp}`;
 
-    let maxSeenTimestamp = lastTimestamp;
+    let nextCursor = { ...cursor };
 
     while (nextUrl) {
       const res = await axios.get(nextUrl);
       const logs = res.data.logs || [];
 
       for (const log of logs) {
+        // 🔒 Skip already-processed logs
+        if (
+          log.timestamp === cursor.timestamp &&
+          log.log_index <= cursor.log_index
+        ) {
+          continue;
+        }
+
         const decoded = tryDecode(log);
         if (!decoded) continue;
 
@@ -102,10 +104,15 @@ async function pollBridgeDeposits() {
           });
 
           console.log("✅ BridgeDeposit sent:", decoded.txHash);
-          maxSeenTimestamp = log.timestamp;
+
+          // advance cursor safely
+          nextCursor = {
+            timestamp: log.timestamp,
+            log_index: log.log_index,
+          };
         } catch (err) {
           console.error("❌ Backend error:", err.message);
-          return; // stop & retry next poll (no cursor advance)
+          return; // retry next poll without committing cursor
         }
       }
 
@@ -114,18 +121,22 @@ async function pollBridgeDeposits() {
         : null;
     }
 
-    // ✅ Commit cursor once, safely
-    if (maxSeenTimestamp !== lastTimestamp) {
-      lastTimestamp = maxSeenTimestamp;
-      saveCursor(lastTimestamp);
-    }
+    // ✅ Commit cursor once per successful poll
+    cursor = nextCursor;
+    saveCursor(cursor);
+
   } catch (err) {
     console.error("Polling error:", err.message);
   }
 }
 
 // ------------------------------
-// Start polling loop
+// Non-overlapping polling loop
 // ------------------------------
+async function loop() {
+  await pollBridgeDeposits();
+  setTimeout(loop, POLL_INTERVAL);
+}
+
 console.log("🚀 Hedera BridgeDeposit indexer running...");
-setInterval(pollBridgeDeposits, POLL_INTERVAL);
+loop();
