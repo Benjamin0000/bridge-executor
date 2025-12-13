@@ -68,16 +68,22 @@ function tryDecode(log) {
 }
 
 // ------------------------------
-// Polling with safe cursoring
+// Check if log is newer than cursor
+// ------------------------------
+function isNewer(log, cursor) {
+  if (!cursor) return true;
+  if (log.timestamp > cursor.timestamp) return true;
+  if (log.timestamp === cursor.timestamp && log.log_index > cursor.log_index)
+    return true;
+  return false;
+}
+
+// ------------------------------
+// Polling with safe cursoring and pagination
 // ------------------------------
 async function pollBridgeDeposits() {
   try {
-    let nextUrl =
-      `${MIRROR}/api/v1/contracts/${CONTRACT_ID}/results/logs` +
-      `?order=asc` +
-      `&limit=${PAGE_LIMIT}` +
-      `&timestamp=gte:${cursor.timestamp}`;
-
+    let nextUrl = `${MIRROR}/api/v1/contracts/${CONTRACT_ID}/results/logs?order=asc&limit=${PAGE_LIMIT}&timestamp=gte:${cursor.timestamp}`;
     let nextCursor = { ...cursor };
 
     while (nextUrl) {
@@ -85,13 +91,7 @@ async function pollBridgeDeposits() {
       const logs = res.data.logs || [];
 
       for (const log of logs) {
-        // 🔒 Skip already-processed logs
-        if (
-          log.timestamp === cursor.timestamp &&
-          log.log_index <= cursor.log_index
-        ) {
-          continue;
-        }
+        if (!isNewer(log, cursor)) continue;
 
         const decoded = tryDecode(log);
         if (!decoded) continue;
@@ -102,7 +102,6 @@ async function pollBridgeDeposits() {
               "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY,
             },
           });
-
           console.log("✅ BridgeDeposit sent:", decoded.txHash);
 
           // advance cursor safely
@@ -116,15 +115,13 @@ async function pollBridgeDeposits() {
         }
       }
 
-      nextUrl = res.data.links?.next
-        ? `${MIRROR}${res.data.links.next}`
-        : null;
+      // pagination: next page
+      nextUrl = res.data.links?.next ? `${MIRROR}${res.data.links.next}` : null;
     }
 
     // ✅ Commit cursor once per successful poll
     cursor = nextCursor;
     saveCursor(cursor);
-
   } catch (err) {
     console.error("Polling error:", err.message);
   }
