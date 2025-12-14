@@ -125,10 +125,6 @@ class BridgeController extends Controller
    public function bridge(Request $request)
    {
         $payload = $request->all();
-
-        Log::info('Incoming Request Payload:', $payload);
-
-
         // ----------------------------
         // 1. Handle EVM events (Alchemy)
         // ----------------------------
@@ -212,19 +208,13 @@ class BridgeController extends Controller
                           ->where('status', 'none')
                           ->first();
 
-        if (!$deposit) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Deposit not found for nonce: ' . $eventNonce
-            ], Response::HTTP_NOT_FOUND);
+        if ($deposit) {
+            $deposit->status = 'pending';
+            $deposit->save();
+
+            ProcessDeposit::dispatch($deposit);
+            Log::info("Hedera deposit processed for nonce: {$eventNonce}");
         }
-
-        $deposit->status = 'pending';
-        $deposit->save();
-
-        ProcessDeposit::dispatch($deposit);
-        Log::info("Hedera deposit processed for nonce: {$eventNonce}");
-
         return response()->json([
             'status' => 'Hedera event processed successfully',
         ], Response::HTTP_OK);
