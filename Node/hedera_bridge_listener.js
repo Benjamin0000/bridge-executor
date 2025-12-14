@@ -21,7 +21,7 @@ const iface = new ethers.Interface([
 ]);
 
 // ------------------------------
-// Cursor helpers (timestamp only)
+// Cursor helpers (timestamp + lastTxHash)
 // ------------------------------
 function loadCursor() {
   try {
@@ -29,7 +29,7 @@ function loadCursor() {
       return JSON.parse(fs.readFileSync(CURSOR_FILE, "utf-8"));
     }
   } catch {}
-  return { timestamp: "0" };
+  return { timestamp: "0", lastTxHash: null };
 }
 
 function saveCursor(cursor) {
@@ -68,7 +68,7 @@ function tryDecode(log) {
 }
 
 // ------------------------------
-// Polling with timestamp cursor
+// Polling with timestamp + txHash cursor
 // ------------------------------
 async function pollBridgeDeposits() {
   try {
@@ -85,15 +85,19 @@ async function pollBridgeDeposits() {
       const logs = res.data.logs || [];
 
       for (const log of logs) {
-        
-        // if (Number(log.timestamp) <= Number(cursor.timestamp)) continue;
+        // 🔒 Skip exact last processed tx
+        if (
+          log.timestamp === cursor.timestamp &&
+          log.transaction_hash === cursor.lastTxHash
+        ) {
+          continue;
+        }
 
         const decoded = tryDecode(log);
-      
-        if (!decoded){
-          console.log("⚠️  Unable to decode log:", log.transaction_hash);
+        if (!decoded) {
+          console.log("⚠️ Unable to decode log:", log.transaction_hash);
           continue;
-        } 
+        }
 
         try {
           await axios.post(TARGET_ENDPOINT, decoded, {
@@ -101,11 +105,10 @@ async function pollBridgeDeposits() {
               "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY,
             },
           });
-
           console.log("✅ BridgeDeposit sent:", decoded.txHash);
-
           // advance cursor safely
           nextCursor.timestamp = log.timestamp;
+          nextCursor.lastTxHash = log.transaction_hash;
         } catch (err) {
           console.error("❌ Backend error:", err.message);
           return; // retry next poll without committing cursor
