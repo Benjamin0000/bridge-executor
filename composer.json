@@ -11,10 +11,11 @@
     "require": {
         "php": "^8.2",
         "bi-php/web3-decode-php": "*",
-        "kornrunner/keccak": "*",
+        "kornrunner/keccak": "^1.1",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10.1",
+        "simplito/elliptic-php": "^1.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

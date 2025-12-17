@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TokenPriceController;
 use App\Http\Controllers\Api\BridgeController;
-use App\Http\Controllers\Api\ValtController;
+use App\Http\Controllers\Api\ValtController; 
 use App\Models\Lp;
 use App\Models\Valt;
 
@@ -12,41 +12,25 @@ Route::get('/token-prices', [TokenPriceController::class, 'get_price']);
 Route::post('/precheck', [BridgeController::class, 'precheck']);
 Route::post('/bridge', [BridgeController::class, 'bridge']);
 Route::post('/get-bridge-status', [BridgeController::class, 'get_bridge_status']);
+Route::get('/mint/{nonce}', [BridgeController::class, 'mint']);
+
 
 Route::get('/valts', [ValtController::class, 'valts']);
 Route::get('/valt/{network}', [ValtController::class, 'get_valt']);
 Route::post('/add-liquidity', [ValtController::class, 'add_liquidity']);
 Route::post('/add-liquidity-al', [ValtController::class, 'add_liquidity_from_alchemy']);
-
 Route::get('/user-liquidity', [ValtController::class, 'user_liquidity']);
 
-Route::get('/mint/{nonce}', [BridgeController::class, 'mint']);
+Route::post('/getnonce', [ValtController::class, 'getNonce']);
+Route::post('/withdraw', [ValtController::class, 'remove_liquidity']);
 
+Route::post('/getpknonce', [ValtController::class, 'getPkNonce']);
+Route::post('/pk', [ValtController::class, 'add_pk']);
 
+Route::get('/pk', [ValtController::class, 'get_pk']);
 
-
-
-Route::post('/set-fee', function (Request $request) {
-    $request->validate([
-        'fee_pct' => 'required|numeric|min:0',
-        'lp_fee_pct' => 'required|numeric|min:0',
-    ]);
-
-    // Get fee from request
-    $fee_pct = $request->fee_pct;
-    $lp_fee_pct = $request->lp_fee_pct;
-
-    set_register('fee_pct', $fee_pct);
-    set_register('lp_fee_pct', $lp_fee_pct);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Fee percentage updated successfully',
-        'data' => [
-            'fee_pct' => $fee_pct
-        ]
-    ]);
-});
+Route::post('/getfeenonce', [ValtController::class, 'getFeeNonce']); 
+Route::post('/set-fee', [ValtController::class, 'setFee']);
 
 
 Route::get('/get-fee', function () {
@@ -63,147 +47,3 @@ Route::get('/get-fee', function () {
         ],
     ]);
 });
-
-
-
-
-
-
-Route::post('/distribute-fee', function (Request $request) {
-    $request->validate([
-        'net_amount' => 'required|numeric|min:0',
-    ]);
-
-    $feePct = (float)get_register('fee_pct') / 100;
-    $lpPct = (float)get_register('lp_fee_pct') / 100;
-    $adminPct = 1 - $lpPct; 
-
-    $netAmount = $request->net_amount;
-    // Calculate the fee amount from net_amount
-    $feeAmount = ($netAmount * $feePct) / (1 - $feePct);
-
-    // Store admin fee in register
-    $adminFee = (float)get_register('total_fee'); 
-    $adminFee +=  $feeAmount * $adminPct;
-    set_register('total_fee', $adminFee);
-
-
-    // Get all active liquidity providers
-    $activeLps = Lp::where('active', true)->get();
-
-    if ($activeLps->isEmpty()) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Total fee recorded, but no active liquidity providers to distribute profit.',
-            'total_fee' => $feeAmount,
-        ]);
-    }
-
-    // lp_fee_pct% of the total fee will be distributed among active LPs
-     
-    $distributableFee = $feeAmount * $lpPct;
-
-    // Total active liquidity
-    $totalLiquidity = $activeLps->sum('amount');
-
-    if ($totalLiquidity > 0) {
-        foreach ($activeLps as $lp) {
-            // proportional profit = (lp.amount / totalLiquidity) * distributableFee
-            $profitShare = ($lp->amount / $totalLiquidity) * $distributableFee;
-            $lp->profit += $profitShare;
-            $lp->save();
-        }
-    }
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Total fee recorded and distributed to active LPs.',
-        'total_fee' => $feeAmount,
-        'distributed_fee' => $distributableFee,
-        'total_active_liquidity' => $totalLiquidity,
-    ]);
-});
-
-
-
-
-// Route::post('/update-withdrawal', function (Request $request) {
-//     // $request->validate([
-//     //     'recipient' => 'required|string',
-//     //     'amount' => 'required|numeric|min:0.000000000000000001',
-//     //     'type' => 'required|string|in:user,admin',
-//     // ]);
-
-//     $recipient = $request->recipient;
-//     $amount = (float) $request->amount;
-//     $type = strtolower($request->type);
-
-//     try {
-//         if ($type === 'user') {
-//             // 🧾 Find the LP record by wallet address
-//             $lp = Lp::where('wallet_address', $recipient)->first();
-
-//             if (!$lp) {
-//                 return response()->json([
-//                     'success' => false,
-//                     'message' => 'Liquidity provider not found.',
-//                 ], 404);
-//             }
-
-//             // Check if user has enough profit
-//             // if ($lp->profit < $amount) {
-//             //     return response()->json([
-//             //         'success' => false,
-//             //         'message' => 'Insufficient profit balance.',
-//             //     ], 400);
-//             // }
-
-//             // Deduct profit
-//             $lp->profit = 0;
-//             $lp->save();
-
-//             return response()->json([
-//                 'success' => true,
-//                 'message' => 'User profit withdrawn successfully.',
-//                 'data' => [
-//                     'wallet_address' => $recipient,
-//                     'new_profit' => $lp->profit,
-//                 ],
-//             ]);
-//         }
-
-//         if ($type === 'admin') {
-//             // 🧾 Deduct from admin total fee register
-//             $adminFee = (float) get_register('total_fee');
-//             // if ($adminFee < $amount) {
-//             //     return response()->json([
-//             //         'success' => false,
-//             //         'message' => 'Insufficient total fee balance.',
-//             //     ], 400);
-//             // }
-
-//             //$adminFee -= $amount;
-//             set_register('total_fee', 0);
-
-//             return response()->json([
-//                 'success' => true,
-//                 'message' => 'Admin total fee updated successfully.',
-//                 'data' => [
-//                     'total_fee' => $adminFee,
-//                 ],
-//             ]);
-//         }
-
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'Invalid type provided.',
-//         ], 400);
-
-//     } catch (\Throwable $th) {
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'Error processing withdrawal.',
-//             'error' => $th->getMessage(),
-//         ], 500);
-//     }
-// });

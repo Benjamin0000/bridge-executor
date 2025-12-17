@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
 use App\Models\Deposit;
+use App\Models\Valt; 
 use App\Jobs\ProcessDeposit; 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr; 
@@ -60,9 +61,27 @@ class BridgeController extends Controller
         $tokenAmountAfterFee = $toTokenAmount * (1 - $feeRate);
         $nativeAmountAfterFee = $nativeAmount * (1 - $feeRate);
 
-        // --- Round both amounts to 2dp for NodeJS safety ---
+       
         $tokenAmountAfterFee = $tokenAmountAfterFee;
         $nativeAmountAfterFee = $nativeAmountAfterFee;
+
+        //adding extra $2 for safty checks
+        $minExtra = round(2 / $nativeTokenPrice, 8);
+
+        if($toToken == $nativeTokenSymbol){
+            $minExtra += $nativeAmountAfterFee;
+        }
+
+        //check if vault has at least $2 for fees coverage
+        $min = number_format($minExtra, 8, '.', '');
+        $valt = Valt::where([ ['network_slug', $toNetwork], ['tvl', '>=', $min] ])->exists();
+        if(!$valt){
+             return response()->json([
+                'success' => false,
+                'message' => 'Node bridge precheck failed.',
+                'node_precheck' => ['canBridge'=>false, 'message'=>'Insufficient liquidity for bridge'],
+            ]);
+        }
 
         $payload = [
             'network' => $toNetwork,
@@ -130,6 +149,8 @@ class BridgeController extends Controller
         // ----------------------------
         $evmBlock = Arr::get($payload, 'event.data.block');
 
+        Log::info('Alchemy access payload. ', $payload);
+
         if (!empty($evmBlock)) {
             //  Log::info('Alchemy access payload. ', $payload);
             // if (!verifyAlchemyRequest()) {
@@ -175,7 +196,7 @@ class BridgeController extends Controller
 
                     if ($newAddress) {
                         // Update pool address in your system
-                        pool_address_evm($newAddress);
+                        // pool_address_evm($newAddress);
                         Log::info("Pool address updated from {$oldAddress} to {$newAddress}");
                     }
                 }
