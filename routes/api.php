@@ -30,10 +30,10 @@ Route::post('/pk', [ValtController::class, 'add_pk']);
 Route::get('/pk', [ValtController::class, 'get_pk']);
 
 Route::post('/getfeenonce', [ValtController::class, 'getFeeNonce']); 
-Route::post('/set-fee', [ValtController::class, 'setFee']);
+Route::post('/fee', [ValtController::class, 'setFee']);
 
 
-Route::get('/get-fee', function () {
+Route::get('/fee', function () { 
     $fee_pct = get_register('fee_pct');
     $lp_fee_pct = get_register('lp_fee_pct');
     $total_fee = get_register('total_fee');
