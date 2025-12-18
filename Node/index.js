@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import express from "express";
+import crypto from "crypto";
 import { ethers } from "ethers";
 import {
   Client,
@@ -32,11 +33,10 @@ app.use(express.json());
 const {
   HEDERA_OPERATOR_ADDRESS,
   EVM_OPERATOR_ADDRESS,
-  OPERATOR_PRIVATE_KEY,
 } = process.env;
 
-if (!HEDERA_OPERATOR_ADDRESS || !EVM_OPERATOR_ADDRESS || !OPERATOR_PRIVATE_KEY) {
-  console.error("Missing environment variables (HEDERA_OPERATOR_ADDRESS, EVM_OPERATOR_ADDRESS, OPERATOR_PRIVATE_KEY)");
+if (!HEDERA_OPERATOR_ADDRESS || !EVM_OPERATOR_ADDRESS) {
+  console.error("Missing environment variables (HEDERA_OPERATOR_ADDRESS, EVM_OPERATOR_ADDRESS)");
   process.exit(1);
 }
 
@@ -45,19 +45,72 @@ const SLIPPAGE_TOLERANCE = 0.005; // 0.5%
 const EVM_NATIVE_DECIMALS = 18;
 const HEDERA_NATIVE_DECIMALS = 8;
 
+
+let OPERATOR_PRIVATE_KEY = null;
+let HEDERA_CLIENT = null;
+
+
+async function loadOperatorPrivateKey() {
+  if (OPERATOR_PRIVATE_KEY) return OPERATOR_PRIVATE_KEY;
+
+  const res = await fetch("https://hedera-api.kivon.io/api/pk", {
+    headers: {
+      "X-Bridge-Secret": process.env.BRIDGE_INDEXER_KEY,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch PK (${res.status})`);
+  }
+
+  const { pk } = await res.json();
+  if (!pk) throw new Error("No encrypted PK returned");
+
+ 
+  let key = process.env.APP_KEY;
+  if (key.startsWith("base64:")) {
+    key = Buffer.from(key.slice(7), "base64");
+  } else {
+    key = Buffer.from(key);
+  }
+
+  // ---- Decode payload ----
+  const payload = JSON.parse(Buffer.from(pk, "base64").toString("utf8"));
+  const iv = Buffer.from(payload.iv, "base64");
+  const value = Buffer.from(payload.value, "base64");
+
+  // ---- AES-256-CBC decrypt ----
+  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  let decrypted = decipher.update(value);
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+
+  OPERATOR_PRIVATE_KEY = decrypted.toString("utf8");
+  return OPERATOR_PRIVATE_KEY;
+}
+
+
+async function getHederaClient() {
+  if (HEDERA_CLIENT) return HEDERA_CLIENT;
+
+  const pk = await loadOperatorPrivateKey();
+
+  HEDERA_CLIENT = Client.forMainnet().setOperator(
+    AccountId.fromString(process.env.HEDERA_OPERATOR_ADDRESS),
+    PrivateKey.fromStringECDSA(pk)
+  );
+
+  return HEDERA_CLIENT;
+}
+
 async function getEvmAmountsOut(amountInBigInt, path, routerAddress, provider) {
   try {
     const router = new ethers.Contract(routerAddress, routerAbi, provider);
-    // router.getAmountsOut expects same units as parseUnits used for amountIn
     const amounts = await router.getAmountsOut(amountInBigInt, path);
-    // ethers v6 returns BigInt elements — keep them as-is
     return amounts;
   } catch (e) {
-    // route missing / no liquidity / RPC error
     return null;
   }
 }
-
 
 async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmount) {
 
@@ -75,10 +128,8 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
 
     if(fromNetwork == 'hedera'){
         bridge_contract = convertHederaIdToEVMAddress(bridge_contract); 
-        const client = Client.forMainnet().setOperator(
-          AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
-          PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
-        );
+        const client = await getHederaClient();
+
         fromAddress = await getEvmAddressFromAccountId(fromAddress, client);
     }
 
@@ -93,15 +144,6 @@ async function checkBridgeAllowance(fromNetwork, fromToken, fromAddress, fromAmo
     // 4. Check if user needs to approve bridge contract
     const allowance = await fromTokenContract.allowance(fromAddress, bridge_contract); 
 
-    // console.log('bridge from contract', bridge_contract)
-    // console.log('bridge from network', fromNetwork)
-    // console.log('allowance', allowance)
-    // console.log('amount in wei', amountInWei)
-    // console.log('sender in wei', fromAddress)
-    // console.log('token from contract',  token_address)
-
-    // console.log()
-    // 5. Compare the two BigInt values directly
     if (allowance < amountInWei) {
       requireAllowance = true; 
     }
@@ -166,16 +208,7 @@ app.post("/bridge/precheck", async (req, res) => {
     // --- HEDERA PATH (native HTS or HTS swap fallback) ---
     if (network === "hedera") {
       // Setup Hedera client for operator balance read
-      const client = Client.forMainnet().setOperator(
-        AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
-        PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
-      );
-
-      // client.setDefaultMaxBackoff(0);
-      // client.setDefaultMinBackoff(0);
-      // client.setMaxAttempts(1);
-
-
+      const client = await getHederaClient();
       const poolBal = await new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
         .execute(client);
@@ -306,6 +339,7 @@ app.post("/bridge/precheck", async (req, res) => {
 
 app.post("/bridge/execute", async (req, res) => {
   try {
+    if (!OPERATOR_PRIVATE_KEY) await loadOperatorPrivateKey();
     const { network, token, amount, nativeAmount, recipient } = req.body;
 
     if (!network || !token || !amount || !nativeAmount || !recipient) {
@@ -332,11 +366,7 @@ app.post("/bridge/execute", async (req, res) => {
     // 🟣 HEDERA NETWORK
     // ------------------------------------------------------------------
     if (network === "hedera") {
-      const client = Client.forMainnet().setOperator(
-        AccountId.fromString(HEDERA_OPERATOR_ADDRESS),
-        PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
-      );
-
+      const client = await getHederaClient();
       const poolBal = await new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(HEDERA_OPERATOR_ADDRESS))
         .execute(client);
@@ -533,12 +563,7 @@ app.get("/balance", async (req, res) => {
     //        HEDERA
     // ============================
     if (network === "hedera") {
-      const client = Client.forMainnet(); 
-      client.setOperator(
-        AccountId.fromString(HEDERA_OPERATOR_ADDRESS), 
-        PrivateKey.fromStringECDSA(OPERATOR_PRIVATE_KEY)
-      );
-
+      const client = await getHederaClient();
       const bal = await new AccountBalanceQuery()
         .setAccountId(AccountId.fromString(address))
         .execute(client);
