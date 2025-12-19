@@ -564,9 +564,9 @@ class ValtController extends Controller
         $address = strtolower($request->address);
         $nonce = bin2hex(random_bytes(16));
         $poolAddress = pool_address_evm();
-        if(!$poolAddress || $address != strtolower($poolAddress) ){
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+        // if(!$poolAddress || $address != strtolower($poolAddress) ){
+        //     return response()->json(['error' => 'Unauthorized'], 401);
+        // }
 
         Cache::put(
             "fee_nonce:$address",
@@ -595,11 +595,11 @@ class ValtController extends Controller
         $address = strtolower($validated['address']);
         $nonce   = $validated['nonce'];
 
-        // 2. Enforce pool address
-        $poolAddress = strtolower(pool_address_evm());
-        if (!$poolAddress || $address !== $poolAddress) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+        // // 2. Enforce pool address
+        // $poolAddress = strtolower(pool_address_evm());
+        // if (!$poolAddress || $address !== $poolAddress) {
+        //     return response()->json(['error' => 'Unauthorized'], 401);
+        // }
 
         // 3. Validate nonce
         $storedNonce = Cache::get("fee_nonce:$address");
